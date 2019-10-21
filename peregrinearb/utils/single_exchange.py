@@ -40,7 +40,7 @@ async def load_exchange_graph(exchange, name=True, fees=False, suppress=None, de
     if fees:
         if 'maker' in exchange.fees['trading']:
             # we always take the maker side because arbitrage depends on filling orders
-            fee = exchange.fees['trading']['maker']
+            fee = exchange.fees['trading']['taker']
         else:
             if 'fees' not in suppress:
                 warnings.warn("The fees for {} have not yet been implemented into the library. "
@@ -56,6 +56,9 @@ async def load_exchange_graph(exchange, name=True, fees=False, suppress=None, de
     except ccxt.errors.NotSupported:
         tickers = {exchange: None for exchange in ccxt.exchanges}
 
+    # fee = 0.0005
+    # print('Using fee:{}'.format(fee))
+
     tasks = [_add_weighted_edge_to_graph(exchange, market_name, graph,
                                          log=True, fee=fee, suppress=suppress, ticker=ticker, depth=depth)
              for market_name, ticker in tickers.items()]
@@ -63,6 +66,49 @@ async def load_exchange_graph(exchange, name=True, fees=False, suppress=None, de
     await asyncio.wait(tasks)
 
     await exchange.close()
+
+    return graph
+
+
+async def load_exchange_graph_v2(exchange, fees=False, suppress=None, depth=False, filter_pairs=[], force_fee=None) -> nx.DiGraph:
+    """
+    Returns a Networkx DiGraph populated with the current ask and bid prices for each market in graph (represented by
+    edges). If depth, also adds an attribute 'depth' to each edge which represents the current volume of orders
+    available at the price represented by the 'weight' attribute of each edge.
+    """
+    if suppress is None:
+        suppress = ['markets']
+
+    await exchange.load_markets()
+
+    if fees:
+        if 'maker' in exchange.fees['trading']:
+            # we always take the maker side because arbitrage depends on filling orders
+            fee = exchange.fees['trading']['taker']
+        else:
+            if 'fees' not in suppress:
+                warnings.warn("The fees for {} have not yet been implemented into the library. "
+                              "Values will be calculated using a 0.2% maker fee.".format(exchange))
+            fee = 0.002
+    else:
+        fee = 0
+
+    graph = nx.DiGraph()
+
+    try:
+        tickers = await exchange.fetch_tickers()
+    except ccxt.errors.NotSupported:
+        tickers = {exchange: None for exchange in ccxt.exchanges}
+
+    if force_fee is not None:
+        fee = force_fee
+    # print('Using fee:{}'.format(fee))
+
+    tasks = [_add_weighted_edge_to_graph(exchange, market_name, graph,
+                                         log=True, fee=fee, suppress=suppress, ticker=ticker, depth=depth)
+             for market_name, ticker in tickers.items() if market_name not in filter_pairs]
+
+    await asyncio.wait(tasks)
 
     return graph
 
@@ -80,13 +126,14 @@ async def populate_exchange_graph(graph: nx.Graph, exchange: ccxt.Exchange, log=
     if fees:
         if 'maker' in exchange.fees['trading']:
             # we always take the maker side because arbitrage depends on filling orders
-            fee = exchange.fees['trading']['maker']
+            fee = exchange.fees['trading']['taker']
         else:
             if 'fees' not in suppress:
                 warnings.warn("The fees for {} have not yet been implemented into the library. "
                               "Values will be calculated using a 0.2% maker fee.".format(exchange))
             fee = 0.002
 
+    print('Using fee:{}'.format(fee))
     tasks = [_add_weighted_edge_to_graph(exchange, edge[2]['market_name'], result, log, fee=fee, suppress=suppress)
              for edge in graph.edges(data=True)]
     await asyncio.wait(tasks)
@@ -123,6 +170,8 @@ async def _add_weighted_edge_to_graph(exchange: ccxt.Exchange, market_name: str,
             return
 
     fee_scalar = 1 - fee
+
+    # print('Using fee:{}'.format(fee))
 
     try:
         ticker_bid = ticker['bid']

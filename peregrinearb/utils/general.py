@@ -41,7 +41,8 @@ def print_profit_opportunity_for_path(graph, path, round_to=None, depth=False, s
             print(printed_line)
 
 
-def print_profit_opportunity_for_path_multi(graph: nx.Graph, path, print_output=True, round_to=None, shorten=False):
+def print_profit_opportunity_for_path_multi(graph: nx.Graph, path, print_output=True, round_to=None, shorten=False,
+                                            threshold=0.0):
     """
     The only difference between this function and the function in utils/general.py is that the print statement
     specifies the exchange name. It assumes all edges in graph and in path have exchange_name and market_name
@@ -51,8 +52,10 @@ def print_profit_opportunity_for_path_multi(graph: nx.Graph, path, print_output=
         return
 
     money = 100
+    start_money = money
     result = ''
     result += "Starting with %(money)i in %(currency)s\n" % {"money": money, "currency": path[0]}
+    is_profitable = False
 
     for i in range(len(path)):
         if i + 1 < len(path):
@@ -71,4 +74,17 @@ def print_profit_opportunity_for_path_multi(graph: nx.Graph, path, print_output=
 
     if print_output:
         print(result)
-    return result
+
+    if money - start_money > threshold:
+        is_profitable = True
+
+    return result, is_profitable
+
+
+best_bid = {
+
+}
+
+best_ask = {
+
+}

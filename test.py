@@ -46,8 +46,8 @@ profit_acc = 0.0
 
 while True:
     try:
-        time.sleep(3)
-        pair_to_remove = [x for x in pair_to_remove if datetime.now() < x[1] + timedelta(minutes=5)]
+        time.sleep(1)
+        pair_to_remove = [x for x in pair_to_remove if datetime.now() < x[1] + timedelta(minutes=1)]
         filter_pairs = [x[0] for x in pair_to_remove]
         graph = loop.run_until_complete(load_exchange_graph_v2(exchange, fees=True, filter_pairs=filter_pairs,
                                                                force_fee=fee_config[exchange_name]))

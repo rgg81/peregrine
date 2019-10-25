@@ -95,9 +95,11 @@ async def pairs():
 
 async def pairs_decimal_fcoin():
     currencies = fcoin.Api().symbols()
+    result_dict = {}
 
-    return [{'pair': f"{x['base_currency'].upper()}/{x['quote_currency'].upper()}",
-             'decimal': x['amount_decimal']} for x in currencies['data']]
+    for x in currencies['data']:
+        result_dict[f"{x['base_currency'].upper()}/{x['quote_currency'].upper()}"] = x['amount_decimal']
+    return result_dict
 
 
 async def pairs_usdt():
@@ -221,9 +223,13 @@ while True:
             # amount_available = None
             max_profit = None
             max_amount = None
+            pair_precision = None
+            index_pair_precision = None
 
-            def amount_path(start_amount, path_input, start_index=0, inverted=False):
+            def amount_path(start_amount, path_input, start_index=0, inverted=False, precision=False):
                 global valid
+                min_pair = None
+                min_cur_index = None
 
                 range_to_use = range(start_index, len(path_input)) if not inverted else range(start_index, -1, step=-1)
 
@@ -262,6 +268,10 @@ while True:
                             pass
 
                         base_currency, quote_currency = selected_pairs[i].split('/')
+                        if precision:
+                            start_amount = round(start_amount, all_pairs_decimal[selected_pairs[i]])
+
+                        last_amount = start_amount
                         if start == base_currency:
                             amount_available = result[i]['bids'][0][1]
 
@@ -284,7 +294,10 @@ while True:
                                     pair_to_remove.append((selected_pairs[i], datetime.now()))
 
                             start_amount = fee * start_amount / result[i]['asks'][0][0]
-                return start_amount
+                        if start_amount < last_amount:
+                            min_pair = selected_pairs[i]
+                            min_cur_index = i if start == base_currency else i + 1
+                return start_amount, min_pair, min_cur_index
 
 
             for a_amount in start_amounts:
@@ -299,13 +312,29 @@ while True:
 
                 first = start_amount
 
-                start_amount = amount_path(start_amount, path)
+                start_amount, pair_precision, index_pair_precision = amount_path(start_amount, path)
 
                 balance = start_amount - first
                 if valid:
                     max_profit = balance
                     max_amount = a_amount
             if is_profitable and max_profit is not None:
+
+                if path[index_pair_precision] != 'USDT':
+                    market, ticker = [(market, ticker) for market, ticker in all_pairs_usdt if
+                                      path[index_pair_precision] in market][0]
+                    amount_cur_precision = round(max_amount / ticker['ask'], all_pairs_decimal[pair_precision])
+                else:
+                    amount_cur_precision = max_amount
+
+                amount_adjusted, _, _ = amount_path(amount_cur_precision, path, start_index=index_pair_precision,
+                                                    inverted=True, precision=True)
+
+                
+
+
+
+
                 print('Is profitable!!')
                 print(f'max profit/amount {max_profit} {max_amount}')
                 if path[0] != 'USDT':

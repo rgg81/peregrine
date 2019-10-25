@@ -93,6 +93,13 @@ async def pairs():
     return all_symbols
 
 
+async def pairs_decimal_fcoin():
+    currencies = fcoin.Api().symbols()
+
+    return [{'pair': f"{x['base_currency'].upper()}/{x['quote_currency'].upper()}",
+             'decimal': x['amount_decimal']} for x in currencies['data']]
+
+
 async def pairs_usdt():
     # binance_ex = getattr(ccxt, 'binance')()
     hitbtc_ex = getattr(ccxt, 'hitbtc2')()
@@ -116,6 +123,8 @@ async def order_book(a_pair, exchange_name):
 
 
 all_pairs = loop.run_until_complete(pairs())
+
+all_pairs_decimal = loop.run_until_complete(pairs_decimal_fcoin())
 
 all_pairs_pre_fetch = [x for x in all_pairs
                        if x.split('/')[0] in symbols_watch and x.split('/')[1] in symbols_watch]
@@ -209,28 +218,22 @@ while True:
             # print(result)
             start_amounts = [5, 10, 50, 100, 200, 400, 800]
             start_amount = None
-            amount_available = None
+            # amount_available = None
             max_profit = None
             max_amount = None
 
-            for a_amount in start_amounts:
-                valid = True
-                for i in range(len(path)):
-                    if i + 1 < len(path):
-                        start = path[i]
-                        if i == 0:
-                            if start != 'USDT':
-                                market, ticker = [(market, ticker) for market, ticker in all_pairs_usdt if start in market][0]
-                                start_amount = a_amount / ticker['ask']
-                                price_usdt = ticker['ask']
-                            else:
-                                start_amount = a_amount
-                            # print('Using amount:{}'.format(start_amount))
+            def amount_path(start_amount, path_input, start_index=0, inverted=False):
+                global valid
 
-                            first = start_amount
+                range_to_use = range(start_index, len(path_input)) if not inverted else range(start_index, -1, step=-1)
 
-                        end = path[i + 1]
+                def add_or_subtract(i):
+                    return i + 1 if not inverted else i - 1
 
+                for i in range_to_use:
+                    if add_or_subtract(i) < len(path_input) and add_or_subtract(i) >= 0:
+                        start = path_input[i]
+                        end = path_input[add_or_subtract(i)]
 
                         try:
                             fee = 1 - fee_config[graph[start][end]['exchange_name']]
@@ -281,10 +284,23 @@ while True:
                                     pair_to_remove.append((selected_pairs[i], datetime.now()))
 
                             start_amount = fee * start_amount / result[i]['asks'][0][0]
+                return start_amount
 
-                        # print('{} --> {} :Amount:{} available:{} fee:{}'.format(start, end, start_amount,
-                        #                                                         amount_available, fee))
-                # print('End amount:{}\n\n'.format(start_amount))
+
+            for a_amount in start_amounts:
+                valid = True
+                if path[0] != 'USDT':
+                    market, ticker = [(market, ticker) for market, ticker in all_pairs_usdt if path[0] in market][0]
+                    start_amount = a_amount / ticker['ask']
+                    price_usdt = ticker['ask']
+                else:
+                    start_amount = a_amount
+                # print('Using amount:{}'.format(start_amount))
+
+                first = start_amount
+
+                start_amount = amount_path(start_amount, path)
+
                 balance = start_amount - first
                 if valid:
                     max_profit = balance

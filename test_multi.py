@@ -82,6 +82,38 @@ loop = asyncio.get_event_loop()
 for exchange_name in exchange_names:
     loop.run_until_complete(exchange_list[exchange_names.index(exchange_name)]['object'].load_markets())
 
+api_auth = fcoin.authorize('', '')
+
+
+async def create_order(symbol, side, price, amount):
+    symbol_transformed = f"{symbol.replace('/', '').lower()}"
+    order_create_param = fcoin.order_create_param(symbol_transformed, side, 'limit', price, amount)
+    return api_auth.orders.create(order_create_param)
+
+
+async def get_order(order_id):
+    return api_auth.orders.get(order_id)
+
+
+async def cancel_order(order_id):
+    return api_auth.orders.submit_cancel(order_id)
+
+
+async def change_price(order_id, price):
+    order_detail = await get_order(order_id)
+    total_amount = float(order_detail['data']['amount'])
+    amount_filled = float(order_detail['data']['filled_amount'])
+    new_amount = total_amount - amount_filled
+    response_cancel = await cancel_order(order_id)
+    if response_cancel['data']:
+        while order_detail['data']['state'] not in ['canceled', 'partial_canceled']:
+            await asyncio.sleep(0.3)
+            order_detail = await get_order(order_id)
+        return await create_order(order_detail['data']['symbol'], order_detail['data']['side'],
+                                  price, new_amount)
+    else:
+        raise Exception(f"Error in cancelling order.. {response_cancel}")
+
 
 async def pairs():
     global loop
@@ -175,11 +207,6 @@ pair_to_remove = []
 
 while True:
     try:
-        # time.sleep(0.5)
-
-        # res = loop.run_until_complete(order_book('ETH/USDT', 'fcoin'))
-        # print(res['bids'][0][1])
-        # print(res['bids'][0][0])
 
         pair_to_remove = [x for x in pair_to_remove if datetime.now() < x[1] + timedelta(seconds=30)]
         filter_pairs = remove_pairs + [x[0] for x in pair_to_remove]
@@ -192,9 +219,7 @@ while True:
 
         graph, paths = bellman_ford_multi(graph, 'ETH', loop_from_source=False, unique_paths=True)
 
-        # graph, paths = bellman_ford_multi(graph, 'ETH', loop_from_source=False, unique_paths=True)
-
-        # exchange.close()
+        log_orders_exec = []
         for path in paths:
             threshold = 0.05
             _, is_profitable = print_profit_opportunity_for_path_multi(graph, path,
@@ -289,11 +314,13 @@ while True:
                             amount_available = order_book_result['bids'][0][1]
                             if precision:
                                 start_amount = round(start_amount, all_pairs_decimal[selected_pair])
-                                log_message_start = (f"BALANCE START SELL:{start} previous:{currencies_balance.get(start, 0.0)} "
-                                      f"now:{round(currencies_balance.get(start, 0.0) - start_amount, precision_balance)} - {start_amount} ")
+                                log_message_start = (f"BALANCE START SELL:{start} previous:{currencies_balance.get(start, 0.0)} - {start_amount}"
+                                      f"now:{round(currencies_balance.get(start, 0.0) - start_amount, precision_balance)}")
                                 start_amount_str = f"{fee} * {start_amount} * {order_book_result['bids'][0][0]}"
+                                log_orders_exec.append({'action': 'sell', 'pair': selected_pair, 'amount': start_amount})
                                 # print(f"Using precision amount is:{start_amount} start:{start} end:{end}")
-                            currencies_balance[start] = round(currencies_balance.get(start, 0.0) - start_amount, precision_balance)
+                            currencies_balance[start] = round(currencies_balance.get(start, 0.0) - start_amount,
+                                                              precision_balance)
 
                             if start_amount > amount_available:
                                 # print('not all amount available : {} > {}'.format(start_amount, amount_available))
@@ -316,20 +343,22 @@ while True:
                             if precision:
 
                                 previous_balance_start = currencies_balance.get(start, 0.0)
-                                total = fee * round(start_amount / order_book_result['asks'][0][0],
-                                              all_pairs_decimal[selected_pair]) * order_book_result['asks'][0][0]
+                                amount_less_fee = round(start_amount / order_book_result['asks'][0][0],
+                                                        all_pairs_decimal[selected_pair])
+                                total = amount_less_fee * order_book_result['asks'][0][0]
                                 currencies_balance[start] = round(currencies_balance.get(start, 0.0) - total
                                                                   ,
                                                                   precision_balance)
 
-                                log_message_start = (f"BALANCE START BUY:{start} previous:{previous_balance_start} "
-                                                     f"now:{currencies_balance[start]} - {total} = {fee} * "
-                                                     f"{round(start_amount / order_book_result['asks'][0][0],all_pairs_decimal[selected_pair])} "
+                                log_message_start = (f"BALANCE START BUY:{start} previous:{previous_balance_start} - {total}"
+                                                     f"now:{currencies_balance[start]} --> calc total:"
+                                                     f"{amount_less_fee} "
                                                      f"* {order_book_result['asks'][0][0]}")
 
-                                start_amount_str = f"{fee} * {round(start_amount / order_book_result['asks'][0][0],all_pairs_decimal[selected_pair])} = {fee} * round({start_amount} / {order_book_result['asks'][0][0]},{all_pairs_decimal[selected_pair]})"
-                                start_amount = fee * round(start_amount / order_book_result['asks'][0][0],
-                                                           all_pairs_decimal[selected_pair])
+                                start_amount_str = f"{fee} * {amount_less_fee} = {fee} * round({start_amount} / {order_book_result['asks'][0][0]},{all_pairs_decimal[selected_pair]})"
+                                log_orders_exec.append({'action': 'buy', 'pair': selected_pair,
+                                                        'amount': amount_less_fee})
+                                start_amount = fee * amount_less_fee
 
                             else:
                                 currencies_balance[start] = round(currencies_balance.get(start, 0.0) - start_amount,
@@ -425,6 +454,7 @@ while True:
 
                 profit_acc += profit_iteration
                 print('Is profitable!!')
+                print(f"Actions:{log_orders_exec}")
                 print(f'max profit/amount {profit_iteration} {max_amount} {profit_iteration_rounded}')
                 with open('good-{}.txt'.format('-'.join(exchange_names)), 'a') as file:
                     file.write('{}-{}-{}-{}\n'.format(profit_acc, max_profit, max_amount, '-->'.join(path)))

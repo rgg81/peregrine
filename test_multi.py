@@ -315,9 +315,11 @@ while True:
                             if precision:
                                 start_amount = round(start_amount, all_pairs_decimal[selected_pair])
                                 log_message_start = (f"BALANCE START SELL:{start} previous:{currencies_balance.get(start, 0.0)} - {start_amount}"
-                                      f"now:{round(currencies_balance.get(start, 0.0) - start_amount, precision_balance)}")
+                                      f" now:{round(currencies_balance.get(start, 0.0) - start_amount, precision_balance)}")
                                 start_amount_str = f"{fee} * {start_amount} * {order_book_result['bids'][0][0]}"
-                                log_orders_exec.append({'action': 'sell', 'pair': selected_pair, 'amount': start_amount})
+                                log_orders_exec.append({'action': 'sell', 'pair': selected_pair,
+                                                        'amount': start_amount,
+                                                        'price': order_book_result['bids'][0][0]})
                                 # print(f"Using precision amount is:{start_amount} start:{start} end:{end}")
                             currencies_balance[start] = round(currencies_balance.get(start, 0.0) - start_amount,
                                                               precision_balance)
@@ -351,13 +353,14 @@ while True:
                                                                   precision_balance)
 
                                 log_message_start = (f"BALANCE START BUY:{start} previous:{previous_balance_start} - {total}"
-                                                     f"now:{currencies_balance[start]} --> calc total:"
+                                                     f" now:{currencies_balance[start]} --> calc total:"
                                                      f"{amount_less_fee} "
                                                      f"* {order_book_result['asks'][0][0]}")
 
                                 start_amount_str = f"{fee} * {amount_less_fee} = {fee} * round({start_amount} / {order_book_result['asks'][0][0]},{all_pairs_decimal[selected_pair]})"
                                 log_orders_exec.append({'action': 'buy', 'pair': selected_pair,
-                                                        'amount': amount_less_fee})
+                                                        'amount': amount_less_fee,
+                                                        'price': order_book_result['asks'][0][0]})
                                 start_amount = fee * amount_less_fee
 
                             else:

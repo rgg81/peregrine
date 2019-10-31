@@ -99,20 +99,83 @@ async def cancel_order(order_id):
     return api_auth.orders.submit_cancel(order_id)
 
 
-async def change_price(order_id, price):
-    order_detail = await get_order(order_id)
+async def change_price(order_detail, price):
+
     total_amount = float(order_detail['data']['amount'])
     amount_filled = float(order_detail['data']['filled_amount'])
     new_amount = total_amount - amount_filled
-    response_cancel = await cancel_order(order_id)
+    response_cancel = await cancel_order(order_detail['data']['id'])
     if response_cancel['data']:
         while order_detail['data']['state'] not in ['canceled', 'partial_canceled']:
             await asyncio.sleep(0.3)
-            order_detail = await get_order(order_id)
+            order_detail = await get_order(order_detail['data']['id'])
         return await create_order(order_detail['data']['symbol'], order_detail['data']['side'],
                                   price, new_amount)
     else:
         raise Exception(f"Error in cancelling order.. {response_cancel}")
+
+
+async def change_best_price(order_detail):
+    order_book_inst = await order_book(order_detail['symbol'], 'fcoin')
+    if order_detail['side'] == 'sell':
+        price = order_book_inst['bids'][0][0]
+    else:
+        price = order_book_inst['asks'][0][0]
+
+    new_order = await change_price(order_detail, price)
+    return new_order
+
+
+def release_all_new_orders(log_orders):
+    global loop
+    new_orders = [create_order(x['symbol'], x['side'], x['price'], x['amount']) for x in log_orders]
+    result_new_orders = loop.run_until_complete(asyncio.gather(*new_orders))
+    return [x['data'] for x in result_new_orders]
+
+
+def get_details_orders(orders):
+    global loop
+    orders_detail = [get_order(x) for x in orders]
+    result_orders_detail = loop.run_until_complete(asyncio.gather(*orders_detail))
+    return result_orders_detail
+
+
+def check_log_item_amount(log_entry, orders_details):
+    only_symbol_and_side = [float(x['filled_amount']) for x in orders_details
+                            if x['symbol'] == log_entry['symbol']
+                            and x['side'] == log_entry['side']]
+
+    return sum(only_symbol_and_side) == log_entry['amount']
+
+
+async def check_log_entry(log_entry, orders_detail):
+    only_symbol_and_side = [x for x in orders_detail
+                            if x['symbol'] == log_entry['symbol']
+                            and x['side'] == log_entry['side']]
+    new_order = await change_best_price(only_symbol_and_side[-1])
+    return new_order
+
+
+def submit_orders_arb(log_orders):
+    global loop
+    orders_id = release_all_new_orders(log_orders)
+    orders_details = get_details_orders(orders_id)
+
+    while all(check_log_item_amount(item, orders_details) for item in log_orders):
+        not_total_filled = [x for x in log_orders if not check_log_item_amount(x, orders_details)]
+        new_orders = [check_log_entry(x, orders_details) for x in not_total_filled]
+        result_new_orders = loop.run_until_complete(asyncio.gather(*new_orders))
+        result_new_orders = [x['data'] for x in result_new_orders]
+        orders_id.extend(result_new_orders)
+        orders_details = get_details_orders(orders_id)
+
+    # compute profit now.. everything is filled
+
+
+
+
+
+
 
 
 async def pairs():
@@ -317,7 +380,7 @@ while True:
                                 log_message_start = (f"BALANCE START SELL:{start} previous:{currencies_balance.get(start, 0.0)} - {start_amount}"
                                       f"now:{round(currencies_balance.get(start, 0.0) - start_amount, precision_balance)}")
                                 start_amount_str = f"{fee} * {start_amount} * {order_book_result['bids'][0][0]}"
-                                log_orders_exec.append({'action': 'sell', 'pair': selected_pair, 'amount': start_amount})
+                                log_orders_exec.append({'side': 'sell', 'symbol': selected_pair, 'amount': start_amount})
                                 # print(f"Using precision amount is:{start_amount} start:{start} end:{end}")
                             currencies_balance[start] = round(currencies_balance.get(start, 0.0) - start_amount,
                                                               precision_balance)
@@ -356,7 +419,7 @@ while True:
                                                      f"* {order_book_result['asks'][0][0]}")
 
                                 start_amount_str = f"{fee} * {amount_less_fee} = {fee} * round({start_amount} / {order_book_result['asks'][0][0]},{all_pairs_decimal[selected_pair]})"
-                                log_orders_exec.append({'action': 'buy', 'pair': selected_pair,
+                                log_orders_exec.append({'side': 'buy', 'symbol': selected_pair,
                                                         'amount': amount_less_fee})
                                 start_amount = fee * amount_less_fee
 

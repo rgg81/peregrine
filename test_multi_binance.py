@@ -1,7 +1,7 @@
 import asyncio
 import time
 import fcoin
-from fcoin.WebsocketClient import WebsocketClient
+from binance.WebsocketClient import WebsocketClient
 from threading import Thread
 from datetime import datetime, timedelta
 from peregrinearb import create_weighted_multi_exchange_digraph, print_profit_opportunity_for_path_multi,\
@@ -13,252 +13,110 @@ import sys
 
 class HandleWebsocket(WebsocketClient):
     def handle(self,msg):
-        # print('receive message')
-        symbol = None
-        ask_price = None
-        ask_qtd = None
-        bid_price = None
-        bid_qtd = None
-        for key, value in msg.items():
-            if key == 'type' and value == 'ping':
-                print(f'Received ping event.. connection is good')
-            elif key == 'type' and 'depth' not in value:
-                print(f'event not identified:{value}')
-            if key == 'type':
-                symbol = value.replace("depth.L20.", "")
-            if key == 'bids':
-                best_bid[symbol] = value[0]
-                bid_price = value[0]
-                bid_qtd = value[1]
-            if key == 'asks':
-                ask_price = value[0]
-                ask_qtd = value[1]
-                best_ask[symbol] = value[0]
-            # print(key,value)
-            # print(key)
+        symbol = msg['data']['s'].lower()
+        ask_price = float(msg['data']['a'])
+        ask_qtd = float(msg['data']['A'])
+        bid_price = float(msg['data']['b'])
+        bid_qtd = float(msg['data']['B'])
+
         best_bid[symbol] = {'price': bid_price, 'qtd': bid_qtd}
         best_ask[symbol] = {'price': ask_price, 'qtd': ask_qtd}
-        # print(best_bid)
-        # print(best_ask)
+
+        # print(f'Symbol:{symbol} {ask_price} {ask_qtd} {bid_price} {bid_qtd}')
 
 
-ws = HandleWebsocket()
-ws2 = HandleWebsocket()
-ws3 = HandleWebsocket()
+symbols_watch = ['BTC', 'USDT', 'ADA', 'ATOM', 'BAT', 'BCHABC', 'BNB', 'USDC', 'BUSD', 'DASH', 'EOS', 'ETC', 'ETH',
+                 'IOST', 'LINK', 'LTC', 'MATIC', 'NEO', 'ONT', 'QTUM', 'TRX', 'VET', 'XLM', 'XMR', 'XRP', 'ZEC']
 
-# time.sleep(10)
-# ws.close()
+remove_pairs = []
 
-fee_config = {
-    'binance': 0.0006,
-    'fcoin': {
-        'fee': 0.0,
-        'ZEC': 0.0003,
-        'ETC': 0.0003,
-        'TRX': 0.0003,
-        'XLM': 0.0003,
-        'PAX/USDT': 0.0003,
-        'TUSD/USDT': 0.0003,
-        'USDC/USDT': 0.0003
-    },
-    'hitbtc2': 0.0007,
-    'hitbtc': 0.0007
-}
+exchange_names = ['binance']
+binance_ex = getattr(ccxt, 'binance')()
 
-exchange_names_input = sys.argv[1]
-
-key_fcoin = sys.argv[2]
-secret_fcoin = sys.argv[3]
-exchange_names = exchange_names_input.split(',')
-
-print('Using exchanges:{}'.format(exchange_names))
-
-symbols_watch = ['BTC', 'USDT', 'ETH', 'XRP', 'LTC', 'EOS', 'BCH', 'PAX', 'TUSD', 'USDC', 'ZEC', 'ETC', 'TRX', 'XLM']
-
-remove_pairs = ['PAX/ETH', 'USDT/PAX', 'PAX/BTC', 'TUSD/BTC', 'ZEC/BTC', 'ETC/BTC', 'TRX/BTC', 'XLM/BTC', 'ZEC/ETH',
-                'ETC/ETH', 'TRX/ETH', 'XLM/ETH']
-
-exchange_list = [{'object': getattr(ccxt, exchange_name)(),
-                  'fee': fee_config[exchange_name]} for exchange_name in exchange_names]
 loop = asyncio.get_event_loop()
 
-for exchange_name in exchange_names:
-    loop.run_until_complete(exchange_list[exchange_names.index(exchange_name)]['object'].load_markets())
-
-api_auth = fcoin.authorize(key_fcoin, secret_fcoin)
-
-
-async def create_order(symbol, side, price, amount):
-    symbol_transformed = f"{symbol.replace('/', '').lower()}"
-    order_create_param = fcoin.order_create_param(symbol_transformed, side, 'limit', price, amount)
-    return api_auth.orders.create(order_create_param)
-
-
-async def get_order(order_id):
-    return api_auth.orders.get(order_id)
-
-
-async def cancel_order(order_id):
-    return api_auth.orders.submit_cancel(order_id)
-
-
-async def change_price(order_detail, price):
-
-    total_amount = float(order_detail['data']['amount'])
-    amount_filled = float(order_detail['data']['filled_amount'])
-    new_amount = total_amount - amount_filled
-    response_cancel = await cancel_order(order_detail['data']['id'])
-    if response_cancel['data']:
-        while order_detail['data']['state'] not in ['canceled', 'partial_canceled']:
-            await asyncio.sleep(0.3)
-            order_detail = await get_order(order_detail['data']['id'])
-        return await create_order(order_detail['data']['symbol'], order_detail['data']['side'],
-                                  price, new_amount)
-    else:
-        raise Exception(f"Error in cancelling order.. {response_cancel}")
-
-
-async def change_best_price(order_detail):
-    order_book_inst = await order_book(order_detail['symbol'], 'fcoin')
-    if order_detail['side'] == 'sell':
-        price = order_book_inst['bids'][0][0]
-    else:
-        price = order_book_inst['asks'][0][0]
-
-    new_order = await change_price(order_detail, price)
-    return new_order
-
-
-def release_all_new_orders(log_orders):
-    global loop
-    new_orders = [create_order(x['symbol'], x['side'], x['price'], x['amount']) for x in log_orders]
-    result_new_orders = loop.run_until_complete(asyncio.gather(*new_orders))
-    return [x['data'] for x in result_new_orders]
-
-
-def get_details_orders(orders):
-    global loop
-    orders_detail = [get_order(x) for x in orders]
-    result_orders_detail = loop.run_until_complete(asyncio.gather(*orders_detail))
-    return result_orders_detail
-
-
-def check_log_item_amount(log_entry, orders_details):
-    only_symbol_and_side = [float(x['filled_amount']) for x in orders_details
-                            if x['symbol'] == log_entry['symbol']
-                            and x['side'] == log_entry['side']]
-    print(f"log_entry:{log_entry} orders_details:{orders_details} "
-          f"filtered:{only_symbol_and_side} sum:{sum(only_symbol_and_side)}")
-
-    return sum(only_symbol_and_side) == log_entry['amount']
-
-
-async def check_log_entry(log_entry, orders_detail):
-    only_symbol_and_side = [x for x in orders_detail
-                            if x['symbol'] == log_entry['symbol']
-                            and x['side'] == log_entry['side']]
-    new_order = await change_best_price(only_symbol_and_side[-1])
-    return new_order
-
-
-def submit_orders_arb(log_orders):
-    global loop
-    orders_id = release_all_new_orders(log_orders)
-
-    print(f"Release all orders:{orders_id}")
-    orders_details = get_details_orders(orders_id)
-    print(f"Orders details:{orders_details}")
-
-    while all(check_log_item_amount(item, orders_details) for item in log_orders):
-        not_total_filled = [x for x in log_orders if not check_log_item_amount(x, orders_details)]
-        print(f"not_total_filled:{not_total_filled}")
-        new_orders = [check_log_entry(x, orders_details) for x in not_total_filled]
-        result_new_orders = loop.run_until_complete(asyncio.gather(*new_orders))
-        print(f"result_new_orders:{result_new_orders}")
-        result_new_orders = [x['data'] for x in result_new_orders]
-        orders_id.extend(result_new_orders)
-        print(f"orders_id:{orders_id}")
-        orders_details = get_details_orders(orders_id)
-        print(f"orders_details:{orders_details}")
-
-    currencies_balance = {}
-    for a_log_order in log_orders:
-        print(f"a_log_order:{a_log_order}")
-        base_currency, quote_currency = a_log_order['symbol'].split('/')
-        orders = [x for x in orders_details
-                  if x['symbol'] == a_log_order['symbol'] and x['side'] == a_log_order['side']]
-        print(f"orders found:{orders}")
-        if a_log_order['side'] == 'buy':
-
-            start = quote_currency
-            end = base_currency
-            total = sum([x['filled_amount'] * x['price'] for x in orders])
-            print(f"currencies_balance[start] = {currencies_balance.get(start, 0.0)} - {total}")
-            currencies_balance[start] = currencies_balance.get(start, 0.0) - total
-            print(f"currencies_balance[start]:{currencies_balance[start]}")
-
-            end_amount = sum([x['filled_amount'] for x in orders]) - sum([x['fill_fees'] for x in orders])
-            currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
-
-        else:
-            end = quote_currency
-            start = base_currency
-            filled_amount = sum([x['filled_amount'] for x in orders])
-            currencies_balance[start] = currencies_balance.get(start, 0.0) - filled_amount
-
-            end_amount = sum([x['filled_amount'] * x['price'] for x in orders]) - sum([x['fill_fees'] * x['price'] for x in orders])
-            currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
-    sys.exit()
-
+loop.run_until_complete(binance_ex.load_markets())
 
 async def pairs():
     global loop
     all_symbols = []
-    for exchange_name in exchange_names:
-        index = exchange_names.index(exchange_name)
-        symbols = [x for x in exchange_list[index]['object'].symbols if x not in remove_pairs]
-        all_symbols = list(set().union(all_symbols, symbols))
+    symbols = [x for x in binance_ex.symbols if x not in remove_pairs]
+    all_symbols = list(set().union(all_symbols, symbols))
     return all_symbols
 
 
 async def pairs_decimal_fcoin():
-    currencies = fcoin.Api().symbols()
+    result = await binance_ex.fetch_markets()
     result_dict = {}
 
-    for x in currencies['data']:
-        result_dict[f"{x['base_currency'].upper()}/{x['quote_currency'].upper()}"] = x['amount_decimal']
+    for x in result:
+        result_dict[f"{x['symbol']}"] = x['precision']['amount']
     return result_dict
 
 
 async def pairs_usdt():
     # binance_ex = getattr(ccxt, 'binance')()
-    hitbtc_ex = getattr(ccxt, 'hitbtc2')()
+
     # tickers_binance = await binance_ex.fetch_tickers()
-    tickers_hitbtc = await hitbtc_ex.fetch_tickers()
+    tickers_binance = await binance_ex.fetch_tickers()
     # tickers = list(tickers_binance.items()) + list(tickers_hitbtc.items())
-    tickers = list(tickers_hitbtc.items())
+    tickers = list(tickers_binance.items())
     return [x for x in tickers if 'USDT' in x[0] and x[0] not in remove_pairs]
+
+
+async def load_order_book_cold_start():
+    # binance_ex = getattr(ccxt, 'binance')()
+
+    # tickers_binance = await binance_ex.fetch_tickers()
+    tickers_binance = await binance_ex.fetch_tickers()
+    # tickers = list(tickers_binance.items()) + list(tickers_hitbtc.items())
+    tickers = list(tickers_binance.items())
+
+    def set_value(item):
+        symbol = item[1]['symbol'].replace("/","").lower()
+        ask_price = item[1]['ask']
+        ask_qtd = item[1]['askVolume']
+        bid_price = item[1]['bid']
+        bid_qtd = item[1]['bidVolume']
+
+        best_bid[symbol] = {'price': bid_price, 'qtd': bid_qtd}
+        best_ask[symbol] = {'price': ask_price, 'qtd': ask_qtd}
+
+    return [set_value(x) for x in tickers]
 
 
 async def order_book(a_pair, exchange_name):
     # print('start:{}'.format(a_pair))
     # index = exchange_names.index(exchange_name)
     key = f"{a_pair.replace('/','').lower()}"
-    ask_price = best_ask[key]['price']
-    ask_qtd = best_ask[key]['qtd']
+    ask_price = float(best_ask[key]['price'])
+    ask_qtd = float(best_ask[key]['qtd'])
 
-    bid_price = best_bid[key]['price']
-    bid_qtd = best_bid[key]['qtd']
+    bid_price = float(best_bid[key]['price'])
+    bid_qtd = float(best_bid[key]['qtd'])
     return {'bids':[[bid_price, bid_qtd]], 'asks':[[ask_price, ask_qtd]]}
 
 
+def order_book_sync(a_pair):
+    # print('start:{}'.format(a_pair))
+    # index = exchange_names.index(exchange_name)
+    key = f"{a_pair.replace('/','').lower()}"
+    ask_price = float(best_ask[key]['price'])
+    ask_qtd = float(best_ask[key]['qtd'])
+
+    bid_price = float(best_bid[key]['price'])
+    bid_qtd = float(best_bid[key]['qtd'])
+    return {'bids':[[bid_price, bid_qtd]], 'asks':[[ask_price, ask_qtd]]}
+
 all_pairs = loop.run_until_complete(pairs())
+
+loop.run_until_complete(load_order_book_cold_start())
 
 all_pairs_decimal = loop.run_until_complete(pairs_decimal_fcoin())
 
 all_pairs_pre_fetch = [x for x in all_pairs
                        if x.split('/')[0] in symbols_watch and x.split('/')[1] in symbols_watch]
-all_pairs_topics = [f"depth.L20.{x.split('/')[0].lower()}{x.split('/')[1].lower()}" for
+all_pairs_topics = [f"{x.split('/')[0].lower()}{x.split('/')[1].lower()}" for
                     x in all_pairs_pre_fetch]
 
 print(all_pairs_topics)
@@ -268,38 +126,34 @@ print(all_pairs_topics[0:length_topic])
 print(all_pairs_topics[length_topic:2*length_topic])
 print(all_pairs_topics[length_topic*2:])
 
-topics = {
-    "id": "tickers",
-    "cmd": "sub",
-    "args": all_pairs_topics[0:length_topic],
+
+ws = HandleWebsocket(all_pairs_topics[0:length_topic])
+ws2 = HandleWebsocket(all_pairs_topics[length_topic:2*length_topic])
+ws3 = HandleWebsocket(all_pairs_topics[length_topic*2:])
+
+# ws = HandleWebsocket(['cndbtc'])
+
+# time.sleep(10)
+# ws.close()
+
+fee_config = {
+    'binance': 0.00045
+    # 'binance': 0.0000
 }
 
-topics2 = {
-    "id": "tickers",
-    "cmd": "sub",
-    "args": all_pairs_topics[length_topic:length_topic*2],
-}
 
-topics3 = {
-    "id": "tickers",
-    "cmd": "sub",
-    "args": all_pairs_topics[length_topic*2:],
-}
+
 sub = ws.sub
 sub2 = ws2.sub
 sub3 = ws3.sub
-Thread(target=sub,args=(topics,)).start()
-Thread(target=sub2,args=(topics2,)).start()
-Thread(target=sub3,args=(topics3,)).start()
+Thread(target=sub,args=()).start()
+Thread(target=sub2,args=()).start()
+Thread(target=sub3,args=()).start()
 
-all_pairs_usdt = loop.run_until_complete(pairs_usdt())
-# fee = 1 - exchange.fees['trading']['taker']
-# fee = 1 - 0.0006
-
-print([exchange['fee'] for exchange in exchange_list])
 
 profit_acc = 0.0
 pair_to_remove = []
+
 
 while True:
     try:
@@ -317,7 +171,7 @@ while True:
 
         log_orders_exec = []
         for path in paths:
-            threshold = 0.05
+            threshold = 0.01
             _, is_profitable = print_profit_opportunity_for_path_multi(graph, path,
                                                                        threshold=threshold,
                                                                        print_output=False)
@@ -332,15 +186,14 @@ while True:
 
                     pair = [x for x in all_pairs if x == f'{start}/{end}' or x == f'{end}/{start}'][0]
                     exchange_name_to_test = graph[start][end]['exchange_name']
-                    tasks.append(order_book(pair, exchange_name_to_test))
+                    # tasks.append(order_book(pair, exchange_name_to_test))
                     selected_pairs.append(pair)
                     # print(loop.run_until_complete(order_book(pair)))
 
-            result = loop.run_until_complete(asyncio.gather(*tasks))
+            # result = loop.run_until_complete(asyncio.gather(*tasks))
 
             # print(result)
-            # start_amounts = [20, 30, 100, 200, 400, 800]
-            start_amounts = [5]
+            start_amounts = [10, 20, 30, 40]
             start_amount = None
             # amount_available = None
             max_profit = None
@@ -395,12 +248,12 @@ while True:
                         if inverted:
                             index_to_use = next(i for i,v in enumerate(selected_pairs) if start in v and end in v)
                             selected_pair = selected_pairs[index_to_use]
-                            order_book_result = result[index_to_use]
+                            order_book_result = order_book_sync(selected_pair)
                             print(f"Check index:{i} to use:{index_to_use} "
                                   f"selected_pairs:{selected_pairs} start:{start} end:{end}")
                         else:
                             selected_pair = selected_pairs[i]
-                            order_book_result = result[i]
+                            order_book_result = order_book_sync(selected_pair)
 
                         base_currency, quote_currency = selected_pair.split('/')
 
@@ -412,7 +265,7 @@ while True:
                             if precision:
                                 start_amount = round(start_amount, all_pairs_decimal[selected_pair])
                                 log_message_start = (f"BALANCE START SELL:{start} previous:{currencies_balance.get(start, 0.0)} - {start_amount}"
-                                      f" now:{round(currencies_balance.get(start, 0.0) - start_amount, precision_balance)}")
+                                                     f" now:{round(currencies_balance.get(start, 0.0) - start_amount, precision_balance)}")
                                 start_amount_str = f"{fee} * {start_amount} * {order_book_result['bids'][0][0]}"
 
                                 log_orders_exec.append({'side': 'sell', 'symbol': selected_pair, 'amount': start_amount,
@@ -434,6 +287,7 @@ while True:
                         elif start == quote_currency and end == base_currency:
 
                             amount_available = order_book_result['asks'][0][1]
+
                             if start_amount / order_book_result['asks'][0][0] > amount_available:
                                 valid = False
                                 if a_amount == start_amounts[0]:
@@ -472,12 +326,15 @@ while True:
 
                         if precision:
                             log_message_end = (f"BALANCE END:{end} previous:{currencies_balance.get(end, 0.0)}"
-                                  f" now:{round(currencies_balance.get(end, 0.0) + start_amount, precision_balance)} "
-                                  f"+ {start_amount} = {start_amount_str} fee:{fee} ")
+                                               f" now:{round(currencies_balance.get(end, 0.0) + start_amount, precision_balance)} "
+                                               f"+ {start_amount} = {start_amount_str} fee:{fee} ")
                             print(f"{start}-->{end} {log_message_start} --> {log_message_end} ")
                         currencies_balance[end] = round(currencies_balance.get(end, 0.0) + start_amount, precision_balance)
                         if inverted:
                             print(f"Start amount:{last_amount} converted:{start_amount} start:{start} end:{end}")
+
+
+                        # print(f"amount:{start_amount} {start} --> {end}")
 
                         if start == 'USDT':
                             value_currency_usdt = 1.0
@@ -507,33 +364,33 @@ while True:
                 if valid:
                     max_profit = balances
                     max_amount = a_amount
+                    # print(balances)
             if is_profitable and max_profit is not None:
 
-                print(f"\n\n")
                 print(f"currency precision:{path[index_pair_precision]} index:{index_pair_precision}")
-                if path[index_pair_precision] != 'USDT':
-
-                    order_book_usdt = loop.run_until_complete(order_book(f"{path[index_pair_precision]}/USDT", 'fcoin'))
-                    amount_cur_precision = round(max_amount / order_book_usdt['asks'][0][0],
-                                                 all_pairs_decimal[f"{path[index_pair_precision]}/USDT"])
-                    print(f"amount_cur_precision:{amount_cur_precision} "
-                          f"max_amount:{max_amount} price:{order_book_usdt['asks'][0][0]} "
-                          f"all_pairs_decimal[pair_precision]:{all_pairs_decimal[pair_precision]}")
-                else:
-                    amount_cur_precision = max_amount
-
-                balance_start_rounded = amount_cur_precision
-
-                if index_pair_precision > 0:
-                    print(f"Checking precision amount optimum")
-                    balance_inverted, _, _ = amount_path(amount_cur_precision, path, start_index=index_pair_precision,
-                                                    inverted=True, precision=False)
-                    balance_start_rounded = balance_inverted[path[0]]
-
-                print(f"Using optimum amount:{balance_start_rounded}")
-                balance_adjusted_2, _, _ = amount_path(balance_start_rounded, path, precision=True)
-
-                print(f"balance_start_rounded:{balance_start_rounded}--{balance_adjusted_2}")
+                # if path[index_pair_precision] != 'USDT':
+                #
+                #     order_book_usdt = loop.run_until_complete(order_book(f"{path[index_pair_precision]}/USDT", 'fcoin'))
+                #     amount_cur_precision = round(max_amount / order_book_usdt['asks'][0][0],
+                #                                  all_pairs_decimal[f"{path[index_pair_precision]}/USDT"])
+                #     print(f"amount_cur_precision:{amount_cur_precision} "
+                #           f"max_amount:{max_amount} price:{order_book_usdt['asks'][0][0]} "
+                #           f"all_pairs_decimal[pair_precision]:{all_pairs_decimal[pair_precision]}")
+                # else:
+                #     amount_cur_precision = max_amount
+                #
+                # balance_start_rounded = amount_cur_precision
+                #
+                # if index_pair_precision > 0:
+                #     print(f"Checking precision amount optimum")
+                #     balance_inverted, _, _ = amount_path(amount_cur_precision, path, start_index=index_pair_precision,
+                #                                          inverted=True, precision=False)
+                #     balance_start_rounded = balance_inverted[path[0]]
+                #
+                # print(f"Using optimum amount:{balance_start_rounded}")
+                # balance_adjusted_2, _, _ = amount_path(balance_start_rounded, path, precision=True)
+                #
+                # print(f"balance_start_rounded:{balance_start_rounded}--{balance_adjusted_2}")
 
                 balance_adjusted = max_profit
 
@@ -541,28 +398,30 @@ while True:
 
                 profit_iteration = 0.0
                 for key, value in balance_adjusted.items():
-                        if key != 'USDT':
-                            order_book_usdt = loop.run_until_complete(order_book(f"{key}/USDT", 'fcoin'))
-                            profit_iteration += value * order_book_usdt['bids'][0][0]
-                        else:
-                            profit_iteration += value
-
-                profit_iteration_rounded = 0.0
-                for key, value in balance_adjusted_2.items():
                     if key != 'USDT':
                         order_book_usdt = loop.run_until_complete(order_book(f"{key}/USDT", 'fcoin'))
-                        profit_iteration_rounded += value * order_book_usdt['bids'][0][0]
+                        profit_iteration += value * (order_book_usdt['bids'][0][0] + order_book_usdt['asks'][0][0])/2
                     else:
-                        profit_iteration_rounded += value
+                        profit_iteration += value
 
+                profit_iteration_rounded = 0.0
+                # for key, value in balance_adjusted_2.items():
+                #     if key != 'USDT':
+                #         order_book_usdt = loop.run_until_complete(order_book(f"{key}/USDT", 'fcoin'))
+                #         profit_iteration_rounded += value * (order_book_usdt['bids'][0][0] + order_book_usdt['asks'][0][0])/2
+                #     else:
+                #         profit_iteration_rounded += value
+
+                # if profit_iteration > 0.0:
                 profit_acc += profit_iteration
                 print('Is profitable!!')
                 print(f"Actions:{log_orders_exec}")
-                submit_orders_arb(log_orders_exec)
                 print(f'max profit/amount {profit_iteration} {max_amount} {profit_iteration_rounded}')
-                with open('good-{}.txt'.format('-'.join(exchange_names)), 'a') as file:
+                with open('good-{}.txt'.format('binance'), 'a') as file:
                     file.write('{}-{}-{}-{}\n'.format(profit_acc, max_profit, max_amount, '-->'.join(path)))
                     file.flush()
+
+                print(f"\n\n")
 
     except Exception as ex:
         print(ex)

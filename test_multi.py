@@ -65,10 +65,10 @@ fee_config = {
     'hitbtc': 0.0007
 }
 
-exchange_names_input = sys.argv[1]
+exchange_names_input = 'fcoin'
 
-key_fcoin = sys.argv[2]
-secret_fcoin = sys.argv[3]
+key_fcoin = sys.argv[1]
+secret_fcoin = sys.argv[2]
 exchange_names = exchange_names_input.split(',')
 
 print('Using exchanges:{}'.format(exchange_names))
@@ -90,8 +90,10 @@ api_auth = fcoin.authorize(key_fcoin, secret_fcoin)
 
 async def create_order(symbol, side, price, amount):
     symbol_transformed = f"{symbol.replace('/', '').lower()}"
-    order_create_param = fcoin.order_create_param(symbol_transformed, side, 'limit', price, amount)
-    return api_auth.orders.create(order_create_param)
+    order_create_param = fcoin.order_create_param(symbol_transformed, side, 'limit', str(price), str(amount))
+    result = api_auth.orders.create(order_create_param)
+    print(result)
+    return result
 
 
 async def get_order(order_id):
@@ -339,8 +341,8 @@ while True:
             result = loop.run_until_complete(asyncio.gather(*tasks))
 
             # print(result)
-            # start_amounts = [20, 30, 100, 200, 400, 800]
-            start_amounts = [5]
+            #start_amounts = [20, 30, 100, 200, 400, 800]
+            start_amounts = [15]
             start_amount = None
             # amount_available = None
             max_profit = None
@@ -567,4 +569,5 @@ while True:
     except Exception as ex:
         print(ex)
         traceback.print_exc()
+        sys.exit()
 

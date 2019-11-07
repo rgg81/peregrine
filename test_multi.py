@@ -121,8 +121,8 @@ async def change_price(order_detail, price):
 
 
 async def change_best_price(order_detail):
-    order_book_inst = await order_book(order_detail['symbol'], 'fcoin')
-    if order_detail['side'] == 'sell':
+    order_book_inst = await order_book(order_detail['data']['symbol'], 'fcoin')
+    if order_detail['data']['side'] == 'sell':
         price = order_book_inst['bids'][0][0]
     else:
         price = order_book_inst['asks'][0][0]
@@ -147,8 +147,8 @@ def get_details_orders(orders):
 
 def check_log_item_amount(log_entry, orders_details):
     only_symbol_and_side = [float(x['filled_amount']) for x in orders_details
-                            if x['symbol'] == log_entry['symbol']
-                            and x['side'] == log_entry['side']]
+                            if x['data']['symbol'] == log_entry['symbol']
+                            and x['data']['side'] == log_entry['side']]
     print(f"log_entry:{log_entry} orders_details:{orders_details} "
           f"filtered:{only_symbol_and_side} sum:{sum(only_symbol_and_side)}")
 
@@ -157,17 +157,22 @@ def check_log_item_amount(log_entry, orders_details):
 
 async def check_log_entry(log_entry, orders_detail):
     only_symbol_and_side = [x for x in orders_detail
-                            if x['symbol'] == log_entry['symbol']
-                            and x['side'] == log_entry['side']]
+                            if x['data']['symbol'] == log_entry['symbol']
+                            and x['data']['side'] == log_entry['side']]
     new_order = await change_best_price(only_symbol_and_side[-1])
     return new_order
 
 
+wait_seconds_time = 2
+
+
 def submit_orders_arb(log_orders):
-    global loop
+    global loop, wait_seconds_time
     orders_id = release_all_new_orders(log_orders)
 
     print(f"Release all orders:{orders_id}")
+    print(f"wait_seconds_time:{wait_seconds_time}")
+    time.sleep(wait_seconds_time)
     orders_details = get_details_orders(orders_id)
     print(f"Orders details:{orders_details}")
 
@@ -182,6 +187,8 @@ def submit_orders_arb(log_orders):
         print(f"orders_id:{orders_id}")
         orders_details = get_details_orders(orders_id)
         print(f"orders_details:{orders_details}")
+        print(f"will wait some time now:{wait_seconds_time} seconds")
+        time.sleep(wait_seconds_time)
 
     currencies_balance = {}
     for a_log_order in log_orders:

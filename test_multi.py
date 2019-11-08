@@ -349,7 +349,7 @@ while True:
 
             # print(result)
             #start_amounts = [20, 30, 100, 200, 400, 800]
-            start_amounts = [53]
+            start_amounts = [0.0050]
             start_amount = None
             # amount_available = None
             max_profit = None
@@ -503,10 +503,13 @@ while True:
 
             for a_amount in start_amounts:
                 valid = True
-                if path[0] != 'USDT':
-
-                    order_book_usdt = loop.run_until_complete(order_book(f"{path[0]}/USDT", 'fcoin'))
-                    start_amount = a_amount / order_book_usdt['asks'][0][0]
+                if path[0] != 'BTC':
+                    pair = [x for x in all_pairs if x == f'{path[0]}/BTC' or x == f'BTC/{path[0]}'][0]
+                    order_book_btc = loop.run_until_complete(order_book(pair, 'fcoin'))
+                    if path[0] == pair.split('/')[0]:
+                        start_amount = a_amount / order_book_btc['asks'][0][0]
+                    else:
+                        start_amount = a_amount * order_book_btc['bids'][0][0]
                 else:
                     start_amount = a_amount
 
@@ -520,13 +523,19 @@ while True:
 
                 print(f"\n\n")
                 print(f"currency precision:{path[index_pair_precision]} index:{index_pair_precision}")
-                if path[index_pair_precision] != 'USDT':
+                if path[index_pair_precision] != 'BTC':
+                    pair = [x for x in all_pairs if x == f'{path[index_pair_precision]}/BTC'
+                            or x == f'BTC/{path[index_pair_precision]}'][0]
+                    order_book_btc = loop.run_until_complete(order_book(pair, 'fcoin'))
+                    if path[index_pair_precision] == pair.split('/')[0]:
+                        amount_cur_precision = round(max_amount / order_book_btc['asks'][0][0],
+                                                     all_pairs_decimal[f"{path[index_pair_precision]}/BTC"])
+                    else:
+                        amount_cur_precision = round(max_amount, all_pairs_decimal[f"BTC/{path[index_pair_precision]}"])\
+                                               * order_book_btc['bids'][0][0]
 
-                    order_book_usdt = loop.run_until_complete(order_book(f"{path[index_pair_precision]}/USDT", 'fcoin'))
-                    amount_cur_precision = round(max_amount / order_book_usdt['asks'][0][0],
-                                                 all_pairs_decimal[f"{path[index_pair_precision]}/USDT"])
                     print(f"amount_cur_precision:{amount_cur_precision} "
-                          f"max_amount:{max_amount} price:{order_book_usdt['asks'][0][0]} "
+                          f"max_amount:{max_amount} price ask:{order_book_btc['asks'][0][0]} price bid:{order_book_btc['bids'][0][0]} "
                           f"all_pairs_decimal[pair_precision]:{all_pairs_decimal[pair_precision]}")
                 else:
                     amount_cur_precision = max_amount

@@ -163,7 +163,7 @@ async def check_log_entry(log_entry, orders_detail):
     return new_order
 
 
-wait_seconds_time = 15
+wait_seconds_time = 30
 
 
 def submit_orders_arb(log_orders):

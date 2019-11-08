@@ -73,7 +73,7 @@ exchange_names = exchange_names_input.split(',')
 
 print('Using exchanges:{}'.format(exchange_names))
 
-symbols_watch = ['BTC', 'USDT', 'ETH', 'XRP', 'LTC', 'EOS', 'BCH', 'PAX', 'TUSD', 'USDC', 'ZEC', 'ETC', 'TRX', 'XLM']
+symbols_watch = ['BTC', 'USDT', 'ETH', 'XRP', 'LTC', 'EOS', 'BCH', 'PAX', 'TUSD', 'USDC']
 
 remove_pairs = ['PAX/ETH', 'USDT/PAX', 'PAX/BTC', 'TUSD/BTC', 'ZEC/BTC', 'ETC/BTC', 'TRX/BTC', 'XLM/BTC', 'ZEC/ETH',
                 'ETC/ETH', 'TRX/ETH', 'XLM/ETH']
@@ -146,7 +146,7 @@ def get_details_orders(orders):
 
 
 def check_log_item_amount(log_entry, orders_details):
-    only_symbol_and_side = [float(x['filled_amount']) for x in orders_details
+    only_symbol_and_side = [float(x['data']['filled_amount']) for x in orders_details
                             if x['data']['symbol'] == log_entry['symbol']
                             and x['data']['side'] == log_entry['side']]
     print(f"log_entry:{log_entry} orders_details:{orders_details} "
@@ -163,7 +163,7 @@ async def check_log_entry(log_entry, orders_detail):
     return new_order
 
 
-wait_seconds_time = 2
+wait_seconds_time = 15
 
 
 def submit_orders_arb(log_orders):
@@ -195,27 +195,27 @@ def submit_orders_arb(log_orders):
         print(f"a_log_order:{a_log_order}")
         base_currency, quote_currency = a_log_order['symbol'].split('/')
         orders = [x for x in orders_details
-                  if x['symbol'] == a_log_order['symbol'] and x['side'] == a_log_order['side']]
+                  if x['data']['symbol'] == a_log_order['symbol'] and x['data']['side'] == a_log_order['side']]
         print(f"orders found:{orders}")
         if a_log_order['side'] == 'buy':
 
             start = quote_currency
             end = base_currency
-            total = sum([x['filled_amount'] * x['price'] for x in orders])
+            total = sum([x['data']['filled_amount'] * x['data']['price'] for x in orders])
             print(f"currencies_balance[start] = {currencies_balance.get(start, 0.0)} - {total}")
             currencies_balance[start] = currencies_balance.get(start, 0.0) - total
             print(f"currencies_balance[start]:{currencies_balance[start]}")
 
-            end_amount = sum([x['filled_amount'] for x in orders]) - sum([x['fill_fees'] for x in orders])
+            end_amount = sum([x['data']['filled_amount'] for x in orders]) - sum([x['data']['fill_fees'] for x in orders])
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
 
         else:
             end = quote_currency
             start = base_currency
-            filled_amount = sum([x['filled_amount'] for x in orders])
+            filled_amount = sum([x['data']['filled_amount'] for x in orders])
             currencies_balance[start] = currencies_balance.get(start, 0.0) - filled_amount
 
-            end_amount = sum([x['filled_amount'] * x['price'] for x in orders]) - sum([x['fill_fees'] * x['price'] for x in orders])
+            end_amount = sum([x['data']['filled_amount'] * x['data']['price'] for x in orders]) - sum([x['data']['fill_fees'] * x['data']['price'] for x in orders])
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
     sys.exit()
 
@@ -349,7 +349,7 @@ while True:
 
             # print(result)
             #start_amounts = [20, 30, 100, 200, 400, 800]
-            start_amounts = [15]
+            start_amounts = [53]
             start_amount = None
             # amount_available = None
             max_profit = None
@@ -423,8 +423,8 @@ while True:
                                 log_message_start = (f"BALANCE START SELL:{start} previous:{currencies_balance.get(start, 0.0)} - {start_amount}"
                                       f" now:{round(currencies_balance.get(start, 0.0) - start_amount, precision_balance)}")
                                 start_amount_str = f"{fee} * {start_amount} * {order_book_result['bids'][0][0]}"
-
-                                log_orders_exec.append({'side': 'sell', 'symbol': selected_pair, 'amount': start_amount,
+                                symbol_transformed = f"{selected_pair.replace('/', '').lower()}"
+                                log_orders_exec.append({'side': 'sell', 'symbol': symbol_transformed, 'amount': start_amount,
                                                         'price': order_book_result['bids'][0][0]})
 
                                 # print(f"Using precision amount is:{start_amount} start:{start} end:{end}")
@@ -465,8 +465,8 @@ while True:
                                                      f"* {order_book_result['asks'][0][0]}")
 
                                 start_amount_str = f"{fee} * {amount_less_fee} = {fee} * round({start_amount} / {order_book_result['asks'][0][0]},{all_pairs_decimal[selected_pair]})"
-
-                                log_orders_exec.append({'side': 'buy', 'symbol': selected_pair,
+                                symbol_transformed = f"{selected_pair.replace('/', '').lower()}"
+                                log_orders_exec.append({'side': 'buy', 'symbol': symbol_transformed,
                                                         'amount': amount_less_fee,
                                                         'price': order_book_result['asks'][0][0]})
 

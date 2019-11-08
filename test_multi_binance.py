@@ -138,7 +138,7 @@ ws3 = HandleWebsocket(all_pairs_topics[length_topic*2:])
 
 fee_config = {
     'binance': 0.00045
-    # 'binance': 0.0000
+    #'binance': 0.0000
 }
 
 

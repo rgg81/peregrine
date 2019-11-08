@@ -150,7 +150,7 @@ def check_log_item_amount(log_entry, orders_details):
                             if x['data']['symbol'] == log_entry['symbol']
                             and x['data']['side'] == log_entry['side']]
     print(f"log_entry:{log_entry} orders_details:{orders_details} "
-          f"filtered:{only_symbol_and_side} sum:{sum(only_symbol_and_side)}")
+          f"filtered:{only_symbol_and_side} sum:{sum(only_symbol_and_side)} log_entry['amount']:{log_entry['amount']}")
 
     return sum(only_symbol_and_side) == log_entry['amount']
 
@@ -176,7 +176,7 @@ def submit_orders_arb(log_orders):
     orders_details = get_details_orders(orders_id)
     print(f"Orders details:{orders_details}")
 
-    while all(check_log_item_amount(item, orders_details) for item in log_orders):
+    while not all(check_log_item_amount(item, orders_details) for item in log_orders):
         not_total_filled = [x for x in log_orders if not check_log_item_amount(x, orders_details)]
         print(f"not_total_filled:{not_total_filled}")
         new_orders = [check_log_entry(x, orders_details) for x in not_total_filled]
@@ -193,7 +193,7 @@ def submit_orders_arb(log_orders):
     currencies_balance = {}
     for a_log_order in log_orders:
         print(f"a_log_order:{a_log_order}")
-        base_currency, quote_currency = a_log_order['symbol'].split('/')
+        base_currency, quote_currency = a_log_order['symbol_complete'].split('/')
         orders = [x for x in orders_details
                   if x['data']['symbol'] == a_log_order['symbol'] and x['data']['side'] == a_log_order['side']]
         print(f"orders found:{orders}")
@@ -208,15 +208,19 @@ def submit_orders_arb(log_orders):
 
             end_amount = sum([x['data']['filled_amount'] for x in orders]) - sum([x['data']['fill_fees'] for x in orders])
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
+            print(f"currencies_balance[end]:{currencies_balance[end]}")
 
         else:
             end = quote_currency
             start = base_currency
             filled_amount = sum([x['data']['filled_amount'] for x in orders])
             currencies_balance[start] = currencies_balance.get(start, 0.0) - filled_amount
+            print(f"currencies_balance[start]:{currencies_balance[start]}")
 
             end_amount = sum([x['data']['filled_amount'] * x['data']['price'] for x in orders]) - sum([x['data']['fill_fees'] * x['data']['price'] for x in orders])
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
+            print(f"currencies_balance[end]:{currencies_balance[end]}")
+    print(f"Final balances:{currencies_balance}")
     sys.exit()
 
 
@@ -425,7 +429,8 @@ while True:
                                 start_amount_str = f"{fee} * {start_amount} * {order_book_result['bids'][0][0]}"
                                 symbol_transformed = f"{selected_pair.replace('/', '').lower()}"
                                 log_orders_exec.append({'side': 'sell', 'symbol': symbol_transformed, 'amount': start_amount,
-                                                        'price': order_book_result['bids'][0][0]})
+                                                        'price': order_book_result['bids'][0][0],
+                                                        'symbol_complete': selected_pair})
 
                                 # print(f"Using precision amount is:{start_amount} start:{start} end:{end}")
                             currencies_balance[start] = round(currencies_balance.get(start, 0.0) - start_amount,
@@ -468,7 +473,8 @@ while True:
                                 symbol_transformed = f"{selected_pair.replace('/', '').lower()}"
                                 log_orders_exec.append({'side': 'buy', 'symbol': symbol_transformed,
                                                         'amount': amount_less_fee,
-                                                        'price': order_book_result['asks'][0][0]})
+                                                        'price': order_book_result['asks'][0][0],
+                                                        'symbol_complete': selected_pair})
 
                                 start_amount = fee * amount_less_fee
 

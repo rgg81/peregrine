@@ -110,22 +110,23 @@ async def change_price(order_detail, price):
     amount_filled = float(order_detail['data']['filled_amount'])
     new_amount = total_amount - amount_filled
     response_cancel = await cancel_order(order_detail['data']['id'])
-    if response_cancel['data']:
-        while order_detail['data']['state'] not in ['canceled', 'partial_canceled']:
-            await asyncio.sleep(0.3)
-            order_detail = await get_order(order_detail['data']['id'])
-        return await create_order(order_detail['data']['symbol'], order_detail['data']['side'],
+    print(f"response_cancel:{response_cancel}")
+    #if response_cancel['data']:
+    while order_detail['data']['state'] not in ['canceled', 'partial_canceled']:
+        await asyncio.sleep(0.3)
+        order_detail = await get_order(order_detail['data']['id'])
+    return await create_order(order_detail['data']['symbol'], order_detail['data']['side'],
                                   price, new_amount)
-    else:
-        raise Exception(f"Error in cancelling order.. {response_cancel}")
+    #else:
+     #   raise Exception(f"Error in cancelling order.. {response_cancel}")
 
 
 async def change_best_price(order_detail):
     order_book_inst = await order_book(order_detail['data']['symbol'], 'fcoin')
     if order_detail['data']['side'] == 'sell':
-        price = order_book_inst['bids'][0][0]
-    else:
         price = order_book_inst['asks'][0][0]
+    else:
+        price = order_book_inst['bids'][0][0]
 
     new_order = await change_price(order_detail, price)
     return new_order
@@ -163,7 +164,7 @@ async def check_log_entry(log_entry, orders_detail):
     return new_order
 
 
-wait_seconds_time = 30
+wait_seconds_time = 60
 
 
 def submit_orders_arb(log_orders):
@@ -201,27 +202,27 @@ def submit_orders_arb(log_orders):
 
             start = quote_currency
             end = base_currency
-            total = sum([x['data']['filled_amount'] * x['data']['price'] for x in orders])
+            total = sum([float(x['data']['filled_amount']) * float(x['data']['price']) for x in orders])
             print(f"currencies_balance[start] = {currencies_balance.get(start, 0.0)} - {total}")
             currencies_balance[start] = currencies_balance.get(start, 0.0) - total
             print(f"currencies_balance[start]:{currencies_balance[start]}")
 
-            end_amount = sum([x['data']['filled_amount'] for x in orders]) - sum([x['data']['fill_fees'] for x in orders])
+            end_amount = sum([float(x['data']['filled_amount']) for x in orders]) - sum([float(x['data']['fill_fees']) for x in orders])
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
             print(f"currencies_balance[end]:{currencies_balance[end]}")
 
         else:
             end = quote_currency
             start = base_currency
-            filled_amount = sum([x['data']['filled_amount'] for x in orders])
+            filled_amount = sum([float(x['data']['filled_amount']) for x in orders])
             currencies_balance[start] = currencies_balance.get(start, 0.0) - filled_amount
             print(f"currencies_balance[start]:{currencies_balance[start]}")
 
-            end_amount = sum([x['data']['filled_amount'] * x['data']['price'] for x in orders]) - sum([x['data']['fill_fees'] * x['data']['price'] for x in orders])
+            end_amount = sum([float(x['data']['filled_amount']) * float(x['data']['price']) for x in orders]) - sum([float(x['data']['fill_fees']) * float(x['data']['price']) for x in orders])
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
             print(f"currencies_balance[end]:{currencies_balance[end]}")
     print(f"Final balances:{currencies_balance}")
-    sys.exit()
+    #sys.exit()
 
 
 async def pairs():

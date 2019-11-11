@@ -154,7 +154,7 @@ def check_log_item_amount(log_entry, orders_details):
     only_symbol_and_side = [float(x['data']['filled_amount']) for x in orders_details
                             if x['data']['symbol'] == log_entry['symbol']
                             and x['data']['side'] == log_entry['side']]
-    print(f"log_entry:{log_entry} orders_details:{orders_details} "
+    print(f"log_entry:{log_entry}"
           f"filtered:{only_symbol_and_side} sum:{sum(only_symbol_and_side)} log_entry['amount']:{log_entry['amount']}")
 
     return sum(only_symbol_and_side) == log_entry['amount']
@@ -187,10 +187,13 @@ def submit_orders_arb(log_orders):
 
         result_new_orders = []
         for x in not_total_filled:
-            new_order = loop.run_until_complete(check_log_entry(x, orders_details))
-            if new_order is not None:
-                print(f"Adding new order:{new_order}")
-                result_new_orders.append(new_order)
+            try:
+                new_order = loop.run_until_complete(check_log_entry(x, orders_details))
+                if new_order is not None:
+                    print(f"Adding new order:{new_order}")
+                    result_new_orders.append(new_order)
+            except Exception as ex:
+                print(f"Error:{ex} will not stop..")
 
         print(f"result_new_orders:{result_new_orders}")
         result_new_orders = [x['data'] for x in result_new_orders]
@@ -231,7 +234,7 @@ def submit_orders_arb(log_orders):
             end_amount = sum([float(x['data']['filled_amount']) * float(x['data']['price']) for x in orders]) - sum([float(x['data']['fill_fees']) * float(x['data']['price']) for x in orders])
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
             print(f"currencies_balance[end]:{currencies_balance[end]}")
-    print(f"Final balances:{currencies_balance}")
+    print(f"Final balances:{currencies_balance}", flush=True)
     return currencies_balance
     #sys.exit()
 

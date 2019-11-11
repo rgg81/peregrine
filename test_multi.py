@@ -232,6 +232,7 @@ def submit_orders_arb(log_orders):
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
             print(f"currencies_balance[end]:{currencies_balance[end]}")
     print(f"Final balances:{currencies_balance}")
+    return currencies_balance
     #sys.exit()
 
 
@@ -582,6 +583,10 @@ while True:
                         else:
                             profit_iteration += value
 
+                print('Is profitable!!')
+                print(f"Actions:{log_orders_exec}")
+                balance_adjusted_3 = submit_orders_arb(log_orders_exec)
+
                 profit_iteration_rounded = 0.0
                 for key, value in balance_adjusted_2.items():
                     if key != 'USDT':
@@ -590,13 +595,19 @@ while True:
                     else:
                         profit_iteration_rounded += value
 
-                profit_acc += profit_iteration
-                print('Is profitable!!')
-                print(f"Actions:{log_orders_exec}")
-                submit_orders_arb(log_orders_exec)
-                print(f'max profit/amount {profit_iteration} {max_amount} {profit_iteration_rounded}')
+                profit_iteration_rounded_live = 0.0
+                for key, value in balance_adjusted_3.items():
+                    if key != 'USDT':
+                        order_book_usdt = loop.run_until_complete(order_book(f"{key}/USDT", 'fcoin'))
+                        profit_iteration_rounded_live += value * order_book_usdt['bids'][0][0]
+                    else:
+                        profit_iteration_rounded_live += value
+
+                profit_acc += profit_iteration_rounded_live
+                print(f'max profit/amount {profit_iteration} {max_amount} {profit_iteration_rounded} '
+                      f'profit_iteration_rounded_live:{profit_iteration_rounded_live}')
                 with open('good-{}.txt'.format('-'.join(exchange_names)), 'a') as file:
-                    file.write('{}-{}-{}-{}\n'.format(profit_acc, max_profit, max_amount, '-->'.join(path)))
+                    file.write('{}-{}-{}-{}\n'.format(profit_acc, profit_iteration_rounded_live, max_amount, '-->'.join(path)))
                     file.flush()
 
     except Exception as ex:

@@ -112,16 +112,22 @@ async def cancel_order(order_id):
 
 async def change_price(order_detail, price, symbol_complete):
 
-    total_amount = float(order_detail['data']['amount'])
-    amount_filled = float(order_detail['data']['filled_amount'])
-    new_amount = total_amount - amount_filled
     response_cancel = await cancel_order(order_detail['data']['id'])
     print(f"response_cancel:{response_cancel}")
     #if response_cancel['data']:
-    while order_detail['data']['state'] not in ['canceled', 'partial_canceled']:
+    while order_detail['data']['state'] not in ['canceled', 'partial_canceled', 'filled']:
         await asyncio.sleep(1.0)
         order_detail = await get_order(order_detail['data']['id'])
-    return await create_order(symbol_complete, order_detail['data']['side'],
+
+    if order_detail['data']['state'] == 'filled':
+        print(f"when trying to change price.. order is already filled")
+        return None
+    else:
+        total_amount = float(order_detail['data']['amount'])
+        amount_filled = float(order_detail['data']['filled_amount'])
+        new_amount = total_amount - amount_filled
+        print(f"Changing price with new order price:{price} and amount:{new_amount}")
+        return await create_order(symbol_complete, order_detail['data']['side'],
                                   price, new_amount)
     #else:
      #   raise Exception(f"Error in cancelling order.. {response_cancel}")
@@ -175,7 +181,7 @@ async def check_log_entry(log_entry, orders_detail):
     return new_order
 
 
-wait_seconds_time = 15
+wait_seconds_time = 60
 
 
 def submit_orders_arb(log_orders):

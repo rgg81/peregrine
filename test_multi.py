@@ -21,7 +21,7 @@ class HandleWebsocket(WebsocketClient):
         bid_qtd = None
         for key, value in msg.items():
             if key == 'type' and value == 'ping':
-                print(f'Received ping event.. connection is good')
+                print(f'Received ping event.. connection is good', flush=True)
             elif key == 'type' and 'depth' not in value:
                 print(f'event not identified:{value}')
             if key == 'type':
@@ -90,7 +90,13 @@ api_auth = fcoin.authorize(key_fcoin, secret_fcoin)
 
 async def create_order(symbol, side, price, amount):
     symbol_transformed = f"{symbol.replace('/', '').lower()}"
-    order_create_param = fcoin.order_create_param(symbol_transformed, side, 'limit', str(price), str(amount))
+
+    if all_pairs_decimal[symbol] == 0:
+        amount_str = str(int(amount))
+    else:
+        amount_str = str(amount)
+
+    order_create_param = fcoin.order_create_param(symbol_transformed, side, 'limit', str(price), amount_str)
     result = api_auth.orders.create(order_create_param)
     print(result)
     return result
@@ -104,7 +110,7 @@ async def cancel_order(order_id):
     return api_auth.orders.submit_cancel(order_id)
 
 
-async def change_price(order_detail, price):
+async def change_price(order_detail, price, symbol_complete):
 
     total_amount = float(order_detail['data']['amount'])
     amount_filled = float(order_detail['data']['filled_amount'])
@@ -115,13 +121,13 @@ async def change_price(order_detail, price):
     while order_detail['data']['state'] not in ['canceled', 'partial_canceled']:
         await asyncio.sleep(1.0)
         order_detail = await get_order(order_detail['data']['id'])
-    return await create_order(order_detail['data']['symbol'], order_detail['data']['side'],
+    return await create_order(symbol_complete, order_detail['data']['side'],
                                   price, new_amount)
     #else:
      #   raise Exception(f"Error in cancelling order.. {response_cancel}")
 
 
-async def change_best_price(order_detail):
+async def change_best_price(order_detail, symbol_complete):
     order_book_inst = await order_book(order_detail['data']['symbol'], 'fcoin')
     if order_detail['data']['side'] == 'sell':
         price = order_book_inst['asks'][0][0]
@@ -129,7 +135,7 @@ async def change_best_price(order_detail):
         price = order_book_inst['bids'][0][0]
     if price != float(order_detail['data']['price']):
         print(f"price is different from order:{price} {float(order_detail['data']['price'])}")
-        new_order = await change_price(order_detail, price)
+        new_order = await change_price(order_detail, price, symbol_complete)
     else:
         print(f"Order price is equal {price} {float(order_detail['data']['price'])}")
         new_order = None
@@ -138,7 +144,7 @@ async def change_best_price(order_detail):
 
 def release_all_new_orders(log_orders):
     global loop
-    new_orders = [create_order(x['symbol'], x['side'], x['price'], x['amount']) for x in log_orders]
+    new_orders = [create_order(x['symbol_complete'], x['side'], x['price'], x['amount']) for x in log_orders]
     result_new_orders = loop.run_until_complete(asyncio.gather(*new_orders))
     return [x['data'] for x in result_new_orders]
 
@@ -164,11 +170,12 @@ async def check_log_entry(log_entry, orders_detail):
     only_symbol_and_side = [x for x in orders_detail
                             if x['data']['symbol'] == log_entry['symbol']
                             and x['data']['side'] == log_entry['side']]
-    new_order = await change_best_price(only_symbol_and_side[-1])
+    new_order = await change_best_price(only_symbol_and_side[-1],
+                                        log_entry['symbol_complete'])
     return new_order
 
 
-wait_seconds_time = 60
+wait_seconds_time = 15
 
 
 def submit_orders_arb(log_orders):
@@ -608,13 +615,13 @@ while True:
 
                 profit_acc += profit_iteration_rounded_live
                 print(f'max profit/amount {profit_iteration} {max_amount} {profit_iteration_rounded} '
-                      f'profit_iteration_rounded_live:{profit_iteration_rounded_live}')
+                      f'profit_iteration_rounded_live:{profit_iteration_rounded_live}', flush=True)
                 with open('good-{}.txt'.format('-'.join(exchange_names)), 'a') as file:
                     file.write('{}-{}-{}-{}\n'.format(profit_acc, profit_iteration_rounded_live, max_amount, '-->'.join(path)))
                     file.flush()
 
     except Exception as ex:
-        print(ex)
+        print(ex, flush=True)
         traceback.print_exc()
         sys.exit()
 

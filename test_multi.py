@@ -113,7 +113,7 @@ async def change_price(order_detail, price):
     print(f"response_cancel:{response_cancel}")
     #if response_cancel['data']:
     while order_detail['data']['state'] not in ['canceled', 'partial_canceled']:
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(1.0)
         order_detail = await get_order(order_detail['data']['id'])
     return await create_order(order_detail['data']['symbol'], order_detail['data']['side'],
                                   price, new_amount)
@@ -127,8 +127,12 @@ async def change_best_price(order_detail):
         price = order_book_inst['asks'][0][0]
     else:
         price = order_book_inst['bids'][0][0]
-
-    new_order = await change_price(order_detail, price)
+    if price != float(order_detail['data']['price']):
+        print(f"price is different from order:{price} {float(order_detail['data']['price'])}")
+        new_order = await change_price(order_detail, price)
+    else:
+        print(f"Order price is equal {price} {float(order_detail['data']['price'])}")
+        new_order = None
     return new_order
 
 
@@ -180,8 +184,14 @@ def submit_orders_arb(log_orders):
     while not all(check_log_item_amount(item, orders_details) for item in log_orders):
         not_total_filled = [x for x in log_orders if not check_log_item_amount(x, orders_details)]
         print(f"not_total_filled:{not_total_filled}")
-        new_orders = [check_log_entry(x, orders_details) for x in not_total_filled]
-        result_new_orders = loop.run_until_complete(asyncio.gather(*new_orders))
+
+        result_new_orders = []
+        for x in not_total_filled:
+            new_order = loop.run_until_complete(check_log_entry(x, orders_details))
+            if new_order is not None:
+                print(f"Adding new order:{new_order}")
+                result_new_orders.append(new_order)
+
         print(f"result_new_orders:{result_new_orders}")
         result_new_orders = [x['data'] for x in result_new_orders]
         orders_id.extend(result_new_orders)

@@ -178,7 +178,7 @@ while True:
             # result = loop.run_until_complete(asyncio.gather(*tasks))
 
             # print(result)
-            start_amounts = [100]
+            start_amounts = [0.005]
             start_amount = None
             # amount_available = None
             max_profit = None
@@ -312,15 +312,8 @@ while True:
 
             balance_adjusted = None
             for a_amount in start_amounts:
-                valid = True
-                if path[0] != 'USDT':
 
-                    order_book_usdt = loop.run_until_complete(order_book(f"{path[0]}/USDT", 'fcoin'))
-                    start_amount = a_amount / order_book_usdt['asks'][0][0]
-                else:
-                    start_amount = a_amount
-
-                balances, pair_precision, index_pair_precision = amount_path(start_amount, path)
+                balances, pair_precision, index_pair_precision = amount_path(a_amount, path, precision=True)
                 balance_adjusted = balances
 
                 # balance = start_amount - first
@@ -336,8 +329,8 @@ while True:
                     profit_iteration += value * order_book_usdt['bids'][0][0]
                 else:
                     profit_iteration += value
-            sys.stdout.write("profit_iteration: $ %f   \r" % (profit_iteration))
-            sys.stdout.flush()
+            # sys.stdout.write("profit_iteration: $ %f   \r" % (profit_iteration))
+            # sys.stdout.flush()
 
 
     except Exception as ex:

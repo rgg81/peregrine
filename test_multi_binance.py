@@ -39,9 +39,11 @@ loop.run_until_complete(binance_ex.load_markets())
 async def pairs():
     global loop
     all_symbols = []
-    symbols = [x for x in binance_ex.symbols if x not in remove_pairs]
-    all_symbols = list(set().union(all_symbols, symbols))
-    return all_symbols
+    tickers = await binance_ex.fetch_tickers()
+
+    symbols = [market_name for market_name, ticker in tickers.items()]
+
+    return symbols
 
 
 async def pairs_decimal_fcoin():

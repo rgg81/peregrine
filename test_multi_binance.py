@@ -172,13 +172,8 @@ while True:
                 if i + 1 < len(path):
                     start = path[i]
                     end = path[i + 1]
-                    print(all_pairs)
-                    print(f'{start}/{end}')
-                    print(f'{end}/{start}')
                     pair = [x for x in all_pairs if x == f'{start}/{end}' or x == f'{end}/{start}'][0]
-                    # tasks.append(order_book(pair, exchange_name_to_test))
                     selected_pairs.append(pair)
-                    # print(loop.run_until_complete(order_book(pair)))
 
             # result = loop.run_until_complete(asyncio.gather(*tasks))
 

@@ -350,6 +350,9 @@ while True:
         print_str = [f"{profits_per_path[i]}" for i in range(len(paths))]
         sys.stdout.write(f"{' | '.join(print_str)}  \r")
         sys.stdout.flush()
+        res_list = [i for i in range(len(profits_per_path)) if profits_per_path[i] > 0.0]
+        if len(res_list) > 0:
+            print(f"found profit!!! {res_list} {[profits_per_path[i] for i in res_list]}")
 
 
     except Exception as ex:

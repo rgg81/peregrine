@@ -187,7 +187,7 @@ while True:
             index_pair_precision = None
 
             valid = False
-            
+
             def amount_path(start_amount, path_input, start_index=0, inverted=False, precision=False):
                 global valid
                 min_pair = None
@@ -323,7 +323,7 @@ while True:
                     max_profit = balances
                     max_amount = a_amount
                     # print(balances)
-
+            print(f"\n\n")
             profit_iteration = 0.0
             for key, value in balance_adjusted.items():
                 if key != 'USDT':

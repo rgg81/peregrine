@@ -139,7 +139,7 @@ ws3 = HandleWebsocket(all_pairs_topics[length_topic*2:])
 # ws.close()
 
 fee_config = {
-    'binance': 0.00045
+    'binance': 0.0006
     #'binance': 0.0000
 }
 
@@ -209,31 +209,7 @@ while True:
                         start = path_input[i]
                         end = path_input[add_or_subtract(i)]
 
-                        try:
-                            fee = 1 - fee_config[graph[start][end]['exchange_name']]
-                        except:
-                            # print(exchange['object'].id)
-                            # print(fee_map[exchange['object'].id])
-                            fee = 1 - fee_config[graph[start][end]['exchange_name']]['fee']
-
-                        try:
-                            fee_for_cur = fee_config[graph[start][end]['exchange_name']][start]
-                            fee = 1 - fee_for_cur
-                        except:
-                            pass
-
-                        try:
-                            fee_for_cur = fee_config[graph[start][end]['exchange_name']][end]
-                            fee = 1 - fee_for_cur
-                        except:
-                            pass
-
-                        try:
-                            pair = [x for x in all_pairs if x == f'{start}/{end}' or x == f'{end}/{start}'][0]
-                            fee_for_cur = fee_config[graph[start][end]['exchange_name']][f"{pair}"]
-                            fee = 1 - fee_for_cur
-                        except:
-                            pass
+                        fee = 1 - fee_config['binance']
 
                         if inverted:
                             index_to_use = next(i for i,v in enumerate(selected_pairs) if start in v and end in v)

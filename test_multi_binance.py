@@ -25,7 +25,7 @@ class HandleWebsocket(WebsocketClient):
         # print(f'Symbol:{symbol} {ask_price} {ask_qtd} {bid_price} {bid_qtd}')
 
 
-symbols_watch = ['BTC', 'USDT', 'VET']
+symbols_watch = ['BTC', 'USDT', 'VET', 'BNB']
 
 remove_pairs = []
 
@@ -160,7 +160,7 @@ pair_to_remove = []
 while True:
     try:
 
-        paths = [['BTC', 'VET', 'USDT', 'BTC']]
+        paths = [['BTC', 'VET', 'USDT', 'BTC'], ['BTC', 'VET', 'BNB', 'BTC']]
 
         log_orders_exec = []
         for path in paths:

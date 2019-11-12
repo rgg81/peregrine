@@ -163,6 +163,7 @@ while True:
         paths = [['BTC', 'VET', 'USDT', 'BTC'], ['BTC', 'VET', 'BNB', 'BTC']]
 
         log_orders_exec = []
+        profits_per_path = []
         for path in paths:
 
             tasks = []
@@ -291,7 +292,7 @@ while True:
                             log_message_end = (f"BALANCE END:{end} previous:{currencies_balance.get(end, 0.0)}"
                                                f" now:{round(currencies_balance.get(end, 0.0) + start_amount, precision_balance)} "
                                                f"+ {start_amount} = {start_amount_str} fee:{fee} ")
-                            print(f"{start}-->{end} {log_message_start} --> {log_message_end} ")
+                            # print(f"{start}-->{end} {log_message_start} --> {log_message_end} ")
                         currencies_balance[end] = round(currencies_balance.get(end, 0.0) + start_amount, precision_balance)
                         if inverted:
                             print(f"Start amount:{last_amount} converted:{start_amount} start:{start} end:{end}")
@@ -332,10 +333,14 @@ while True:
                 else:
                     profit_iteration += value
 
-            print(f"profit_iteration:{profit_iteration} {balance_adjusted}\n\n")
-            # sys.stdout.write("profit_iteration: $ %f   \r" % (profit_iteration))
-            # sys.stdout.flush()
+            # print(f"profit_iteration:{profit_iteration} {balance_adjusted}\n\n")
+            profits_per_path.append(profit_iteration)
 
+        for i in range(len(paths)):
+            sys.stdout.write(f"path:{'-->'.join(path[i])} profit:{profits_per_path[i]}\n")
+        str_carriage_return = ''.join(['\r' for x in paths])
+        sys.stdout.write(f"{str_carriage_return}")
+        sys.stdout.flush()
 
     except Exception as ex:
         print(ex)

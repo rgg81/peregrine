@@ -25,8 +25,7 @@ class HandleWebsocket(WebsocketClient):
         # print(f'Symbol:{symbol} {ask_price} {ask_qtd} {bid_price} {bid_qtd}')
 
 
-symbols_watch = ['BTC', 'USDT', 'ADA', 'ATOM', 'BAT', 'BCHABC', 'BNB', 'USDC', 'BUSD', 'DASH', 'EOS', 'ETC', 'ETH',
-                 'IOST', 'LINK', 'LTC', 'MATIC', 'NEO', 'ONT', 'QTUM', 'TRX', 'VET', 'XLM', 'XMR', 'XRP', 'ZEC']
+symbols_watch = ['BTC', 'USDT', 'VET']
 
 remove_pairs = []
 
@@ -158,23 +157,10 @@ pair_to_remove = []
 while True:
     try:
 
-        pair_to_remove = [x for x in pair_to_remove if datetime.now() < x[1] + timedelta(seconds=30)]
-        filter_pairs = remove_pairs + [x[0] for x in pair_to_remove]
-
-        graph = create_weighted_multi_exchange_digraph(exchange_names, log=True, fees=True,
-                                                       only_symbols=symbols_watch,
-                                                       remove_pairs=filter_pairs,
-                                                       fee_map=fee_config,
-                                                       symbols_pre_fetch=all_pairs_pre_fetch)
-
-        graph, paths = bellman_ford_multi(graph, 'ETH', loop_from_source=False, unique_paths=True)
+        paths = ['BTC', 'VET', 'USDT', 'BTC']
 
         log_orders_exec = []
         for path in paths:
-            threshold = 0.01
-            _, is_profitable = print_profit_opportunity_for_path_multi(graph, path,
-                                                                       threshold=threshold,
-                                                                       print_output=False)
 
             tasks = []
             selected_pairs = []
@@ -183,9 +169,8 @@ while True:
                 if i + 1 < len(path):
                     start = path[i]
                     end = path[i + 1]
-
+                    print(all_pairs)
                     pair = [x for x in all_pairs if x == f'{start}/{end}' or x == f'{end}/{start}'][0]
-                    exchange_name_to_test = graph[start][end]['exchange_name']
                     # tasks.append(order_book(pair, exchange_name_to_test))
                     selected_pairs.append(pair)
                     # print(loop.run_until_complete(order_book(pair)))
@@ -193,7 +178,7 @@ while True:
             # result = loop.run_until_complete(asyncio.gather(*tasks))
 
             # print(result)
-            start_amounts = [10, 20, 30, 40]
+            start_amounts = [100]
             start_amount = None
             # amount_available = None
             max_profit = None
@@ -349,6 +334,7 @@ while True:
                 return currencies_balance, min_pair, min_cur_index
 
 
+            balance_adjusted = None
             for a_amount in start_amounts:
                 valid = True
                 if path[0] != 'USDT':
@@ -359,71 +345,27 @@ while True:
                     start_amount = a_amount
 
                 balances, pair_precision, index_pair_precision = amount_path(start_amount, path)
+                balance_adjusted = balances
 
                 # balance = start_amount - first
                 if valid:
                     max_profit = balances
                     max_amount = a_amount
                     # print(balances)
-            if is_profitable and max_profit is not None:
 
-                print(f"currency precision:{path[index_pair_precision]} index:{index_pair_precision}")
-                # if path[index_pair_precision] != 'USDT':
-                #
-                #     order_book_usdt = loop.run_until_complete(order_book(f"{path[index_pair_precision]}/USDT", 'fcoin'))
-                #     amount_cur_precision = round(max_amount / order_book_usdt['asks'][0][0],
-                #                                  all_pairs_decimal[f"{path[index_pair_precision]}/USDT"])
-                #     print(f"amount_cur_precision:{amount_cur_precision} "
-                #           f"max_amount:{max_amount} price:{order_book_usdt['asks'][0][0]} "
-                #           f"all_pairs_decimal[pair_precision]:{all_pairs_decimal[pair_precision]}")
-                # else:
-                #     amount_cur_precision = max_amount
-                #
-                # balance_start_rounded = amount_cur_precision
-                #
-                # if index_pair_precision > 0:
-                #     print(f"Checking precision amount optimum")
-                #     balance_inverted, _, _ = amount_path(amount_cur_precision, path, start_index=index_pair_precision,
-                #                                          inverted=True, precision=False)
-                #     balance_start_rounded = balance_inverted[path[0]]
-                #
-                # print(f"Using optimum amount:{balance_start_rounded}")
-                # balance_adjusted_2, _, _ = amount_path(balance_start_rounded, path, precision=True)
-                #
-                # print(f"balance_start_rounded:{balance_start_rounded}--{balance_adjusted_2}")
+            profit_iteration = 0.0
+            for key, value in balance_adjusted.items():
+                if key != 'USDT':
+                    order_book_usdt = loop.run_until_complete(order_book(f"{key}/USDT", 'fcoin'))
+                    profit_iteration += value * order_book_usdt['bids'][0][0]
+                else:
+                    profit_iteration += value
+            sys.stdout.write("profit_iteration: $ %f   \r" % (profit_iteration))
+            sys.stdout.flush()
 
-                balance_adjusted = max_profit
-
-                print(balance_adjusted)
-
-                profit_iteration = 0.0
-                for key, value in balance_adjusted.items():
-                    if key != 'USDT':
-                        order_book_usdt = loop.run_until_complete(order_book(f"{key}/USDT", 'fcoin'))
-                        profit_iteration += value * (order_book_usdt['bids'][0][0] + order_book_usdt['asks'][0][0])/2
-                    else:
-                        profit_iteration += value
-
-                profit_iteration_rounded = 0.0
-                # for key, value in balance_adjusted_2.items():
-                #     if key != 'USDT':
-                #         order_book_usdt = loop.run_until_complete(order_book(f"{key}/USDT", 'fcoin'))
-                #         profit_iteration_rounded += value * (order_book_usdt['bids'][0][0] + order_book_usdt['asks'][0][0])/2
-                #     else:
-                #         profit_iteration_rounded += value
-
-                # if profit_iteration > 0.0:
-                profit_acc += profit_iteration
-                print('Is profitable!!')
-                print(f"Actions:{log_orders_exec}")
-                print(f'max profit/amount {profit_iteration} {max_amount} {profit_iteration_rounded}')
-                with open('good-{}.txt'.format('binance'), 'a') as file:
-                    file.write('{}-{}-{}-{}\n'.format(profit_acc, max_profit, max_amount, '-->'.join(path)))
-                    file.flush()
-
-                print(f"\n\n")
 
     except Exception as ex:
         print(ex)
         traceback.print_exc()
+        sys.exit()
 

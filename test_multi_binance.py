@@ -337,7 +337,7 @@ while True:
             profits_per_path.append(profit_iteration)
 
         for i in range(len(paths)):
-            sys.stdout.write(f"path:{'-->'.join(path[i])} profit:{profits_per_path[i]}\n")
+            sys.stdout.write(f"path:{'-->'.join(paths[i])} profit:{profits_per_path[i]}\n")
         str_carriage_return = ''.join(['\r' for x in paths])
         sys.stdout.write(f"{str_carriage_return}")
         sys.stdout.flush()

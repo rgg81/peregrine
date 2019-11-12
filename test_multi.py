@@ -136,9 +136,9 @@ async def change_price(order_detail, price, symbol_complete):
 async def change_best_price(order_detail, symbol_complete):
     order_book_inst = await order_book(order_detail['data']['symbol'], 'fcoin')
     if order_detail['data']['side'] == 'sell':
-        price = order_book_inst['asks'][0][0]
-    else:
         price = order_book_inst['bids'][0][0]
+    else:
+        price = order_book_inst['asks'][0][0]
     if price != float(order_detail['data']['price']):
         print(f"price is different from order:{price} {float(order_detail['data']['price'])}")
         new_order = await change_price(order_detail, price, symbol_complete)
@@ -181,7 +181,7 @@ async def check_log_entry(log_entry, orders_detail):
     return new_order
 
 
-wait_seconds_time = 60
+wait_seconds_time = 120
 
 
 def submit_orders_arb(log_orders):
@@ -358,7 +358,7 @@ while True:
 
         log_orders_exec = []
         for path in paths:
-            threshold = 0.05
+            threshold = 0.08
             _, is_profitable = print_profit_opportunity_for_path_multi(graph, path,
                                                                        threshold=threshold,
                                                                        print_output=False)

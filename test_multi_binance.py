@@ -332,7 +332,7 @@ while True:
                 else:
                     profit_iteration += value
 
-            print(f"profit_iteration:{profit_iteration}\n\n")
+            print(f"profit_iteration:{profit_iteration} {balance_adjusted}\n\n")
             # sys.stdout.write("profit_iteration: $ %f   \r" % (profit_iteration))
             # sys.stdout.flush()
 

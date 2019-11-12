@@ -186,6 +186,8 @@ while True:
             pair_precision = None
             index_pair_precision = None
 
+            valid = False
+            
             def amount_path(start_amount, path_input, start_index=0, inverted=False, precision=False):
                 global valid
                 min_pair = None

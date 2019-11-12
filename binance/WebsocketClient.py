@@ -29,7 +29,7 @@ class WebsocketClient():
             if self.last_update_date + timedelta(seconds=30) < datetime.now():
                 # now_ms = int(time.time())
                 self.ws.pong('pong')
-                print('Sent a PING!!')
+                # print('Sent a PING!!')
                 self.last_update_date = datetime.now()
             try:
                 msg = json.loads(self.ws.recv())

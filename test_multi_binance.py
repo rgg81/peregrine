@@ -317,7 +317,17 @@ while True:
             balance_adjusted = None
             for a_amount in start_amounts:
 
-                balances, pair_precision, index_pair_precision = amount_path(a_amount, path, precision=True)
+                if path[0] != 'BTC':
+                    pair = [x for x in all_pairs if x == f'{path[0]}/BTC' or x == f'BTC/{path[0]}'][0]
+                    order_book_btc = loop.run_until_complete(order_book(pair, 'fcoin'))
+                    if path[0] == pair.split('/')[0]:
+                        start_amount = a_amount / order_book_btc['asks'][0][0]
+                    else:
+                        start_amount = a_amount * order_book_btc['bids'][0][0]
+                else:
+                    start_amount = a_amount
+
+                balances, pair_precision, index_pair_precision = amount_path(start_amount, path, precision=True)
                 balance_adjusted = balances
 
                 # balance = start_amount - first

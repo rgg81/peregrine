@@ -38,10 +38,11 @@ loop.run_until_complete(binance_ex.load_markets())
 
 async def pairs():
     global loop
-    all_symbols = []
+
     tickers = await binance_ex.fetch_tickers()
 
-    symbols = [market_name for market_name, ticker in tickers.items()]
+    symbols = [market_name for market_name, ticker in tickers.items() if market_name.split('/')[0] in symbols_watch or
+               market_name.split('/')[1] in symbols_watch]
 
     return symbols
 

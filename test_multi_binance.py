@@ -160,7 +160,7 @@ pair_to_remove = []
 while True:
     try:
 
-        paths = ['BTC', 'VET', 'USDT', 'BTC']
+        paths = [['BTC', 'VET', 'USDT', 'BTC']]
 
         log_orders_exec = []
         for path in paths:

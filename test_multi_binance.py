@@ -41,7 +41,7 @@ async def pairs():
 
     tickers = await binance_ex.fetch_tickers()
 
-    symbols = [market_name for market_name, ticker in tickers.items() if market_name.split('/')[0] in symbols_watch or
+    symbols = [market_name for market_name, ticker in tickers.items() if market_name.split('/')[0] in symbols_watch and
                market_name.split('/')[1] in symbols_watch]
 
     return symbols

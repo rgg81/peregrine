@@ -323,7 +323,7 @@ while True:
                     max_profit = balances
                     max_amount = a_amount
                     # print(balances)
-            print(f"\n\n")
+
             profit_iteration = 0.0
             for key, value in balance_adjusted.items():
                 if key != 'USDT':
@@ -331,6 +331,8 @@ while True:
                     profit_iteration += value * order_book_usdt['bids'][0][0]
                 else:
                     profit_iteration += value
+
+            print(f"profit_iteration:{profit_iteration}\n\n")
             # sys.stdout.write("profit_iteration: $ %f   \r" % (profit_iteration))
             # sys.stdout.flush()
 

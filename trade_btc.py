@@ -373,6 +373,7 @@ amount_btc_minimum = 0.005
 print(f"Waiting {back_time_limit_seconds} seconds to store power")
 time.sleep(back_time_limit_seconds)
 
+
 while True:
     try:
         symbol_use = 'BTC/USDT'
@@ -406,7 +407,11 @@ while True:
             balance_result_sell = submit_orders_arb(log_order)
             print(balance_result_sell)
 
-            print(f"Final result is:{balance_result_buy['USDT'] + balance_result_sell['USDT']}")
+            profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
+
+            profit_acc += profit_iteration
+
+            print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}")
             # sys.exit()
 
         elif power_value < 0.30:
@@ -432,8 +437,12 @@ while True:
             balance_result_buy = submit_orders_arb(log_order)
             print(balance_result_buy)
 
-            print(f"Final result is:{balance_result_buy['USDT'] + balance_result_sell['USDT']}")
+            profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
+            profit_acc += profit_iteration
+
+            print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}")
             # sys.exit()
+
 
     except Exception as ex:
         print(ex, flush=True)

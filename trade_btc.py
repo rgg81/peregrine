@@ -430,7 +430,7 @@ while True:
             balance_result_buy = submit_orders_arb(log_order)
             print(balance_result_buy)
 
-            time.sleep(60)
+            time.sleep(180)
 
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'sell', 'symbol': symbol_transformed,

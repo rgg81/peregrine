@@ -25,12 +25,12 @@ class HandleWebsocket(WebsocketClient):
         # print(f'Symbol:{symbol} {ask_price} {ask_qtd} {bid_price} {bid_qtd}')
 
 
-symbols_watch = ['BTC', 'USDT', 'VET', 'BNB', 'ETH']
+symbols_watch = ['BTC', 'USDT', 'VET', 'BNB', 'ETH', 'IOST']
 
 remove_pairs = []
 
 exchange_names = ['binance']
-binance_ex = getattr(ccxt, 'binance')()
+binance_ex = getattr(ccxt, 'binance')({'timeout': 30000})
 
 loop = asyncio.get_event_loop()
 
@@ -161,7 +161,9 @@ while True:
     try:
 
         paths = [['BTC', 'VET', 'USDT', 'BTC'], ['BTC', 'VET', 'BNB', 'BTC'], ['BTC', 'VET', 'ETH', 'BTC'],
-                 ['VET', 'BTC', 'USDT', 'VET'], ['VET', 'BTC', 'BNB', 'VET'], ['VET', 'BTC', 'ETH', 'VET']]
+                 ['VET', 'BTC', 'USDT', 'VET'], ['VET', 'BTC', 'BNB', 'VET'], ['VET', 'BTC', 'ETH', 'VET'],
+                 ['BTC', 'IOST', 'USDT', 'BTC'], ['BTC', 'IOST', 'BNB', 'BTC'], ['BTC', 'IOST', 'ETH', 'BTC'],
+                 ['IOST', 'BTC', 'USDT', 'IOST'], ['IOST', 'BTC', 'BNB', 'IOST'], ['IOST', 'BTC', 'ETH', 'IOST']]
 
         log_orders_exec = []
         profits_per_path = []
@@ -180,7 +182,7 @@ while True:
             # result = loop.run_until_complete(asyncio.gather(*tasks))
 
             # print(result)
-            start_amounts = [0.005]
+            start_amounts = [0.100]
             start_amount = None
             # amount_available = None
             max_profit = None
@@ -316,7 +318,7 @@ while True:
 
             balance_adjusted = None
             for a_amount in start_amounts:
-
+                valid = True
                 if path[0] != 'BTC':
                     pair = [x for x in all_pairs if x == f'{path[0]}/BTC' or x == f'BTC/{path[0]}'][0]
                     order_book_btc = loop.run_until_complete(order_book(pair, 'fcoin'))
@@ -347,12 +349,12 @@ while True:
             # print(f"profit_iteration:{profit_iteration} {balance_adjusted}\n\n")
             profits_per_path.append(profit_iteration)
 
-        print_str = [f"{profits_per_path[i]}" for i in range(len(paths))]
+        print_str = [f"{round(profits_per_path[i], 3)}" for i in range(len(paths))]
         sys.stdout.write(f"{' | '.join(print_str)}  \r")
         sys.stdout.flush()
         res_list = [i for i in range(len(profits_per_path)) if profits_per_path[i] > 0.0]
         if len(res_list) > 0:
-            print(f"found profit!!! {res_list} {[profits_per_path[i] for i in res_list]}\n\n")
+            print(f"found profit!!! {res_list} {[profits_per_path[i] for i in res_list]} amount:{max_amount} valid:{valid}\n\n")
 
 
     except Exception as ex:

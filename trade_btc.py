@@ -79,6 +79,17 @@ def power_trades():
         return 0.50
 
 
+def amplitude():
+    global last_trades
+    if len(last_trades) > 0:
+        first = last_trades[0]['price']
+        last = last_trades[-1]['price']
+
+        return last/first
+    else:
+        return 0.0
+
+
 ws = HandleWebsocket()
 ws2 = HandleWebsocketTrade()
 
@@ -378,13 +389,15 @@ while True:
     try:
         symbol_use = 'BTC/USDT'
         symbol_transformed = f"{symbol_use.replace('/', '').lower()}"
-        power_value = power_trades()
+        amplitude_value = amplitude()
 
         # print(last_trades)
-        sys.stdout.write(f"power:{power_value} {len(last_trades)} {datetime.fromtimestamp(last_trades[0]['ts']//1000)}"
-                         f" {datetime.fromtimestamp(last_trades[-1]['ts']//1000)}  \r")
+        sys.stdout.write(f"amplitude_value:{amplitude_value} {len(last_trades)} "
+                         f"{datetime.fromtimestamp(last_trades[0]['ts']//1000)}"
+                         f" {datetime.fromtimestamp(last_trades[-1]['ts']//1000)} "
+                         f"{last_trades[0]['price']} {last_trades[-1]['price']}  \r")
         sys.stdout.flush()
-        if power_value > 0.70:
+        if amplitude_value > 1.0002:
 
             print(f"starting a long {power_value}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))
@@ -414,7 +427,7 @@ while True:
             print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}")
             # sys.exit()
 
-        elif power_value < 0.30:
+        elif amplitude_value < 0.9998:
 
             print(f"starting a short {power_value}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))
@@ -441,7 +454,7 @@ while True:
             profit_acc += profit_iteration
 
             print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}")
-            # sys.exit()
+        #     # sys.exit()
 
 
     except Exception as ex:

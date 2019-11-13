@@ -405,6 +405,8 @@ time.sleep(back_time_limit_seconds)
 
 last_show_status = datetime.now()
 
+wait_time_until_finish_seconds = 180
+
 while True:
     try:
         symbol_use = 'BTC/USDT'
@@ -418,7 +420,7 @@ while True:
                          f" {datetime.fromtimestamp(last_trades[-1]['ts']//1000)} "
                          f"{last_trades[0]['price']} {last_trades[-1]['price']}\n", flush=True)
             last_show_status = datetime.now()
-        if indicator > 0.70:
+        if indicator > 0.60:
 
             print(f"starting a long {indicator}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))
@@ -430,7 +432,7 @@ while True:
             balance_result_buy = submit_orders_arb(log_order)
             print(balance_result_buy)
 
-            time.sleep(180)
+            time.sleep(wait_time_until_finish_seconds)
 
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'sell', 'symbol': symbol_transformed,
@@ -448,7 +450,7 @@ while True:
             print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}")
             # sys.exit()
 
-        elif indicator < 0.30:
+        elif indicator < 0.40:
 
             print(f"starting a short {indicator}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))
@@ -460,7 +462,7 @@ while True:
             balance_result_sell = submit_orders_arb(log_order)
             print(balance_result_sell)
 
-            time.sleep(180)
+            time.sleep(wait_time_until_finish_seconds)
 
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'buy', 'symbol': symbol_transformed,

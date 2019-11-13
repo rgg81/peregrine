@@ -384,6 +384,7 @@ amount_btc_minimum = 0.005
 print(f"Waiting {back_time_limit_seconds} seconds to store power")
 time.sleep(back_time_limit_seconds)
 
+last_show_status = datetime.now()
 
 while True:
     try:
@@ -392,11 +393,12 @@ while True:
         amplitude_value = amplitude()
 
         # print(last_trades)
-        sys.stdout.write(f"amplitude_value:{amplitude_value} {len(last_trades)} "
+        if datetime.now() > last_show_status + timedelta(seconds=1):
+            print(f"amplitude_value:{amplitude_value} {len(last_trades)} "
                          f"{datetime.fromtimestamp(last_trades[0]['ts']//1000)}"
                          f" {datetime.fromtimestamp(last_trades[-1]['ts']//1000)} "
-                         f"{last_trades[0]['price']} {last_trades[-1]['price']}  \r")
-        sys.stdout.flush()
+                         f"{last_trades[0]['price']} {last_trades[-1]['price']}\n", flush=True)
+            last_show_status = datetime.now()
         if amplitude_value > 1.0002:
 
             print(f"starting a long {amplitude_value}")

@@ -180,7 +180,7 @@ async def change_price(order_detail, price, symbol_complete):
 
 
 async def change_best_price(order_detail, symbol_complete):
-    order_book_inst = await order_book(order_detail['data']['symbol'], 'fcoin')
+    order_book_inst = await order_book(order_detail['data']['symbol'])
     if order_detail['data']['side'] == 'sell':
         price = order_book_inst['bids'][0][0]
     else:
@@ -393,7 +393,7 @@ while True:
         amplitude_value = amplitude()
 
         # print(last_trades)
-        if datetime.now() > last_show_status + timedelta(seconds=1):
+        if datetime.now() > last_show_status + timedelta(seconds=5):
             print(f"amplitude_value:{amplitude_value} {len(last_trades)} "
                          f"{datetime.fromtimestamp(last_trades[0]['ts']//1000)}"
                          f" {datetime.fromtimestamp(last_trades[-1]['ts']//1000)} "

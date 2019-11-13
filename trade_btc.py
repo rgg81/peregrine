@@ -155,10 +155,11 @@ async def get_order(order_id):
 async def cancel_order(order_id):
     return api_auth.orders.submit_cancel(order_id)
 
+force_stop = False
+
 
 async def change_price(order_detail, price, symbol_complete):
-
-    response_cancel = await cancel_order(order_detail['data']['id'])
+    global force_stop
     total_amount = float(order_detail['data']['amount'])
     amount_filled = float(order_detail['data']['filled_amount'])
     new_amount = total_amount - amount_filled
@@ -168,8 +169,10 @@ async def change_price(order_detail, price, symbol_complete):
               f"will wait 30 seconds if order is filled", flush=True)
         await asyncio.sleep(30.0)
         order_detail = await get_order(order_detail['data']['id'])
-        print(f"finished wait", flush=True)
+        print(f"finished wait will force stop after cancel", flush=True)
+        force_stop = True
 
+    response_cancel = await cancel_order(order_detail['data']['id'])
     print(f"response_cancel:{response_cancel}")
 
     while order_detail['data']['state'] not in ['canceled', 'partial_canceled', 'filled']:
@@ -247,7 +250,7 @@ wait_seconds_time = 2
 
 
 def submit_orders_arb(log_orders):
-    global loop, wait_seconds_time
+    global loop, wait_seconds_time, force_stop
     orders_id = release_all_new_orders(log_orders)
 
     print(f"Release all orders:{orders_id}")
@@ -256,7 +259,7 @@ def submit_orders_arb(log_orders):
     orders_details = get_details_orders(orders_id)
     print(f"Orders details:{orders_details}")
 
-    while not all(check_log_item_amount(item, orders_details) for item in log_orders):
+    while not all(check_log_item_amount(item, orders_details) for item in log_orders) and not force_stop:
         not_total_filled = [x for x in log_orders if not check_log_item_amount(x, orders_details)]
         print(f"not_total_filled:{not_total_filled}")
 

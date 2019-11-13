@@ -41,7 +41,7 @@ class HandleWebsocket(WebsocketClient):
 
 
 last_trades = []
-back_time_limit_seconds = 60
+back_time_limit_seconds = 300
 
 
 def filter_last_trades():
@@ -409,18 +409,18 @@ while True:
     try:
         symbol_use = 'BTC/USDT'
         symbol_transformed = f"{symbol_use.replace('/', '').lower()}"
-        amplitude_value = amplitude()
+        indicator = power_trades()
 
         # print(last_trades)
         if datetime.now() > last_show_status + timedelta(seconds=5):
-            print(f"amplitude_value:{amplitude_value} {len(last_trades)} "
+            print(f"indicator:{indicator} {len(last_trades)} "
                          f"{datetime.fromtimestamp(last_trades[0]['ts']//1000)}"
                          f" {datetime.fromtimestamp(last_trades[-1]['ts']//1000)} "
                          f"{last_trades[0]['price']} {last_trades[-1]['price']}\n", flush=True)
             last_show_status = datetime.now()
-        if amplitude_value > 1.0003:
+        if indicator > 0.70:
 
-            print(f"starting a long {amplitude_value}")
+            print(f"starting a long {indicator}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'buy', 'symbol': symbol_transformed,
                                     'amount': amount_btc_minimum,
@@ -448,9 +448,9 @@ while True:
             print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}")
             # sys.exit()
 
-        elif amplitude_value < 0.9997:
+        elif indicator < 0.30:
 
-            print(f"starting a short {amplitude_value}")
+            print(f"starting a short {indicator}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'sell', 'symbol': symbol_transformed,
                           'amount': amount_btc_minimum,
@@ -460,7 +460,7 @@ while True:
             balance_result_sell = submit_orders_arb(log_order)
             print(balance_result_sell)
 
-            time.sleep(60)
+            time.sleep(180)
 
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'buy', 'symbol': symbol_transformed,
@@ -476,7 +476,6 @@ while True:
 
             print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}")
         #     # sys.exit()
-
 
     except Exception as ex:
         print(ex, flush=True)

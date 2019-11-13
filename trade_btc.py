@@ -159,8 +159,19 @@ async def cancel_order(order_id):
 async def change_price(order_detail, price, symbol_complete):
 
     response_cancel = await cancel_order(order_detail['data']['id'])
+    total_amount = float(order_detail['data']['amount'])
+    amount_filled = float(order_detail['data']['filled_amount'])
+    new_amount = total_amount - amount_filled
+
+    if new_amount < amount_btc_minimum:
+        print(f"No good.. new amount:{new_amount} is less than minimum:{amount_btc_minimum} "
+              f"will wait 30 seconds if order is filled", flush=True)
+        await asyncio.sleep(30.0)
+        order_detail = await get_order(order_detail['data']['id'])
+        print(f"finished wait", flush=True)
+
     print(f"response_cancel:{response_cancel}")
-    #if response_cancel['data']:
+
     while order_detail['data']['state'] not in ['canceled', 'partial_canceled', 'filled']:
         await asyncio.sleep(1.0)
         order_detail = await get_order(order_detail['data']['id'])
@@ -172,8 +183,13 @@ async def change_price(order_detail, price, symbol_complete):
         total_amount = float(order_detail['data']['amount'])
         amount_filled = float(order_detail['data']['filled_amount'])
         new_amount = total_amount - amount_filled
-        print(f"Changing price with new order price:{price} and amount:{new_amount}")
-        return await create_order(symbol_complete, order_detail['data']['side'],
+        if new_amount < amount_btc_minimum:
+            print(f"No good.. new amount:{new_amount} is less than minimum:{amount_btc_minimum} "
+                  f"not able to release new order", flush=True)
+            return None
+        else:
+            print(f"Changing price with new order price:{price} and amount:{new_amount}")
+            return await create_order(symbol_complete, order_detail['data']['side'],
                                   price, new_amount)
     #else:
      #   raise Exception(f"Error in cancelling order.. {response_cancel}")

@@ -399,7 +399,7 @@ while True:
         sys.stdout.flush()
         if amplitude_value > 1.0002:
 
-            print(f"starting a long {power_value}")
+            print(f"starting a long {amplitude_value}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'buy', 'symbol': symbol_transformed,
                                     'amount': amount_btc_minimum,
@@ -429,7 +429,7 @@ while True:
 
         elif amplitude_value < 0.9998:
 
-            print(f"starting a short {power_value}")
+            print(f"starting a short {amplitude_value}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'sell', 'symbol': symbol_transformed,
                           'amount': amount_btc_minimum,

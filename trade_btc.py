@@ -158,7 +158,7 @@ async def cancel_order(order_id):
 force_stop = False
 
 
-async def change_price(order_detail, price, symbol_complete):
+async def change_price(order_detail, price, symbol_complete, enter_order=False):
     global force_stop
     total_amount = float(order_detail['data']['amount'])
     amount_filled = float(order_detail['data']['filled_amount'])
@@ -182,6 +182,9 @@ async def change_price(order_detail, price, symbol_complete):
     if order_detail['data']['state'] == 'filled':
         print(f"when trying to change price.. order is already filled")
         return None
+    elif enter_order:
+        print(f"Since this order is an entry order.. will cancel and not change price..")
+        return None
     else:
         total_amount = float(order_detail['data']['amount'])
         amount_filled = float(order_detail['data']['filled_amount'])
@@ -198,7 +201,7 @@ async def change_price(order_detail, price, symbol_complete):
      #   raise Exception(f"Error in cancelling order.. {response_cancel}")
 
 
-async def change_best_price(order_detail, symbol_complete):
+async def change_best_price(order_detail, symbol_complete, enter_order=False):
     order_book_inst = await order_book(order_detail['data']['symbol'])
     if order_detail['data']['side'] == 'sell':
         price = order_book_inst['bids'][0][0]
@@ -206,7 +209,7 @@ async def change_best_price(order_detail, symbol_complete):
         price = order_book_inst['asks'][0][0]
     if price != float(order_detail['data']['price']):
         print(f"price is different from order:{price} {float(order_detail['data']['price'])}")
-        new_order = await change_price(order_detail, price, symbol_complete)
+        new_order = await change_price(order_detail, price, symbol_complete, enter_order=enter_order)
     else:
         print(f"Order price is equal {price} {float(order_detail['data']['price'])}")
         new_order = None
@@ -237,19 +240,19 @@ def check_log_item_amount(log_entry, orders_details):
     return sum(only_symbol_and_side) == log_entry['amount']
 
 
-async def check_log_entry(log_entry, orders_detail):
+async def check_log_entry(log_entry, orders_detail, enter_order=False):
     only_symbol_and_side = [x for x in orders_detail
                             if x['data']['symbol'] == log_entry['symbol']
                             and x['data']['side'] == log_entry['side']]
     new_order = await change_best_price(only_symbol_and_side[-1],
-                                        log_entry['symbol_complete'])
+                                        log_entry['symbol_complete'], enter_order)
     return new_order
 
 
 wait_seconds_time = 2
 
 
-def submit_orders_arb(log_orders):
+def submit_orders_arb(log_orders, enter_order=False):
     global loop, wait_seconds_time, force_stop
     orders_id = release_all_new_orders(log_orders)
 
@@ -266,7 +269,7 @@ def submit_orders_arb(log_orders):
         result_new_orders = []
         for x in not_total_filled:
             try:
-                new_order = loop.run_until_complete(check_log_entry(x, orders_details))
+                new_order = loop.run_until_complete(check_log_entry(x, orders_details, enter_order=enter_order))
                 if new_order is not None:
                     print(f"Adding new order:{new_order}")
                     result_new_orders.append(new_order)
@@ -409,6 +412,7 @@ wait_time_until_finish_seconds = 10
 
 while True:
     try:
+        force_stop = False
         symbol_use = 'BTC/USDT'
         symbol_transformed = f"{symbol_use.replace('/', '').lower()}"
         indicator = power_trades()
@@ -430,7 +434,7 @@ while True:
                                     'price': order_book_result['asks'][0][0],
                                     'symbol_complete': symbol_use}]
 
-            balance_result_buy = submit_orders_arb(log_order)
+            balance_result_buy = submit_orders_arb(log_order, enter_order=True)
             print(balance_result_buy)
 
             time.sleep(wait_time_until_finish_seconds)
@@ -460,7 +464,7 @@ while True:
                           'price': order_book_result['bids'][0][0],
                           'symbol_complete': symbol_use}]
 
-            balance_result_sell = submit_orders_arb(log_order)
+            balance_result_sell = submit_orders_arb(log_order, enter_order=True)
             print(balance_result_sell)
 
             time.sleep(wait_time_until_finish_seconds)

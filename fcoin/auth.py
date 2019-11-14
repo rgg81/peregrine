@@ -21,8 +21,9 @@ class HMACAuth(AuthBase):
             request_body = json.loads(request.body.decode())
             request_body = collections.OrderedDict(sorted(request_body.items()))
             for item in request_body.items():
-                param = item[0] + "=" + item[1]
-                adjusted_body = adjusted_body + param + "&"
+                if item[1] is not None:
+                    param = item[0] + "=" + item[1]
+                    adjusted_body = adjusted_body + param + "&"
             message = request.method + request.url + timestamp + (adjusted_body[:-1] or "")
         elif request.method == "GET":
             message = request.method + request.url + timestamp + ""

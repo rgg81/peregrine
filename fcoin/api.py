@@ -73,8 +73,9 @@ class Orders():
   def create(self,sorted_param):
     params = ""
     for item in sorted_param.items():
-      param = item[0] + '=' + item[1]
-      params = params + param + "&"
+      if item[1] is not None:
+        param = item[0] + '=' + item[1]
+        params = params + param + "&"
     self.api_url = self.api_base_url + "?" + params[:-1]
 
     r =  self.session.post(self.api_url,json = sorted_param)

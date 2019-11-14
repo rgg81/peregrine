@@ -41,7 +41,7 @@ class HandleWebsocket(WebsocketClient):
 
 
 last_trades = []
-back_time_limit_seconds = 300
+back_time_limit_seconds = 60
 
 
 def filter_last_trades():
@@ -158,7 +158,7 @@ async def cancel_order(order_id):
 force_stop = False
 
 
-async def change_price(order_detail, price, symbol_complete):
+async def change_price(order_detail, price, symbol_complete, enter_order=False):
     global force_stop
     total_amount = float(order_detail['data']['amount'])
     amount_filled = float(order_detail['data']['filled_amount'])
@@ -182,6 +182,10 @@ async def change_price(order_detail, price, symbol_complete):
     if order_detail['data']['state'] == 'filled':
         print(f"when trying to change price.. order is already filled")
         return None
+    elif enter_order:
+        print(f"Since this order is an entry order.. will cancel and not change price..")
+        force_stop = True
+        return None
     else:
         total_amount = float(order_detail['data']['amount'])
         amount_filled = float(order_detail['data']['filled_amount'])
@@ -198,7 +202,7 @@ async def change_price(order_detail, price, symbol_complete):
      #   raise Exception(f"Error in cancelling order.. {response_cancel}")
 
 
-async def change_best_price(order_detail, symbol_complete):
+async def change_best_price(order_detail, symbol_complete, enter_order=False):
     order_book_inst = await order_book(order_detail['data']['symbol'])
     if order_detail['data']['side'] == 'sell':
         price = order_book_inst['bids'][0][0]
@@ -206,7 +210,7 @@ async def change_best_price(order_detail, symbol_complete):
         price = order_book_inst['asks'][0][0]
     if price != float(order_detail['data']['price']):
         print(f"price is different from order:{price} {float(order_detail['data']['price'])}")
-        new_order = await change_price(order_detail, price, symbol_complete)
+        new_order = await change_price(order_detail, price, symbol_complete, enter_order=enter_order)
     else:
         print(f"Order price is equal {price} {float(order_detail['data']['price'])}")
         new_order = None
@@ -237,19 +241,19 @@ def check_log_item_amount(log_entry, orders_details):
     return sum(only_symbol_and_side) == log_entry['amount']
 
 
-async def check_log_entry(log_entry, orders_detail):
+async def check_log_entry(log_entry, orders_detail, enter_order=False):
     only_symbol_and_side = [x for x in orders_detail
                             if x['data']['symbol'] == log_entry['symbol']
                             and x['data']['side'] == log_entry['side']]
     new_order = await change_best_price(only_symbol_and_side[-1],
-                                        log_entry['symbol_complete'])
+                                        log_entry['symbol_complete'], enter_order)
     return new_order
 
 
 wait_seconds_time = 2
 
 
-def submit_orders_arb(log_orders):
+def submit_orders_arb(log_orders, enter_order=False):
     global loop, wait_seconds_time, force_stop
     orders_id = release_all_new_orders(log_orders)
 
@@ -266,7 +270,7 @@ def submit_orders_arb(log_orders):
         result_new_orders = []
         for x in not_total_filled:
             try:
-                new_order = loop.run_until_complete(check_log_entry(x, orders_details))
+                new_order = loop.run_until_complete(check_log_entry(x, orders_details, enter_order=enter_order))
                 if new_order is not None:
                     print(f"Adding new order:{new_order}")
                     result_new_orders.append(new_order)
@@ -405,32 +409,38 @@ time.sleep(back_time_limit_seconds)
 
 last_show_status = datetime.now()
 
-wait_time_until_finish_seconds = 180
+wait_time_until_finish_seconds = 5
 
 while True:
     try:
+        force_stop = False
         symbol_use = 'BTC/USDT'
         symbol_transformed = f"{symbol_use.replace('/', '').lower()}"
         indicator = power_trades()
+        amplitude_value = amplitude()
 
         # print(last_trades)
         if datetime.now() > last_show_status + timedelta(seconds=5):
-            print(f"indicator:{indicator} {len(last_trades)} "
+            print(f"indicator:{indicator} amplitude_value:{amplitude_value} {len(last_trades)} "
                          f"{datetime.fromtimestamp(last_trades[0]['ts']//1000)}"
                          f" {datetime.fromtimestamp(last_trades[-1]['ts']//1000)} "
                          f"{last_trades[0]['price']} {last_trades[-1]['price']}\n", flush=True)
             last_show_status = datetime.now()
-        if indicator > 0.60:
+        if indicator > 0.60 and amplitude_value > 1.0003:
 
-            print(f"starting a long {indicator}")
+            print(f"starting a long {indicator} amplitude_value:{amplitude_value}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'buy', 'symbol': symbol_transformed,
                                     'amount': amount_btc_minimum,
                                     'price': order_book_result['asks'][0][0],
                                     'symbol_complete': symbol_use}]
 
-            balance_result_buy = submit_orders_arb(log_order)
+            balance_result_buy = submit_orders_arb(log_order, enter_order=True)
             print(balance_result_buy)
+
+            if force_stop:
+                print(f"Restarting loop since force stop is true")
+                continue
 
             time.sleep(wait_time_until_finish_seconds)
 
@@ -450,17 +460,21 @@ while True:
             print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}")
             # sys.exit()
 
-        elif indicator < 0.40:
+        elif indicator < 0.40 and amplitude_value < 0.9997:
 
-            print(f"starting a short {indicator}")
+            print(f"starting a short {indicator} amplitude_value:{amplitude_value}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'sell', 'symbol': symbol_transformed,
                           'amount': amount_btc_minimum,
                           'price': order_book_result['bids'][0][0],
                           'symbol_complete': symbol_use}]
 
-            balance_result_sell = submit_orders_arb(log_order)
+            balance_result_sell = submit_orders_arb(log_order, enter_order=True)
             print(balance_result_sell)
+
+            if force_stop:
+                print(f"Restarting loop since force stop is true")
+                continue
 
             time.sleep(wait_time_until_finish_seconds)
 

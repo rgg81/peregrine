@@ -142,7 +142,7 @@ async def create_order(symbol, side, price, amount):
     else:
         amount_str = str(amount)
 
-    order_create_param = fcoin.order_create_param(symbol_transformed, side, 'limit', str(price), amount_str)
+    order_create_param = fcoin.order_create_param(symbol_transformed, side, 'market', str(price), amount_str)
     result = api_auth.orders.create(order_create_param)
     print(result)
     return result

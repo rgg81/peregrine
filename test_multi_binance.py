@@ -25,7 +25,18 @@ class HandleWebsocket(WebsocketClient):
         # print(f'Symbol:{symbol} {ask_price} {ask_qtd} {bid_price} {bid_qtd}')
 
 
-symbols_watch = ['BTC', 'USDT', 'VET', 'BNB', 'ETH', 'IOST', 'MATIC', 'TRX']
+symbols_base = ['BTC', 'ETH', 'USDT']
+
+symbols_watch = ['VET', 'IOST', 'TRX', 'HOT', 'MFT', 'STORM', 'KEY', 'SC', 'XVG', 'ZIL', 'DATA',
+                 'LEND', 'ADA', 'CMT', 'VIB', 'XLM', 'TNT', 'FUN',
+                 'IOTX', 'QKC', 'DOCK', 'NEO', 'BNB', 'LINK', 'QTUM', 'BAT', 'IOTA']
+
+symbols_watch_usdt = ['ARPA', 'VET', 'ERD', 'COCOS', 'DOGE', 'MATIC', 'FET', 'NKN', 'BAT']
+
+all_symbols = symbols_base + symbols_watch + symbols_watch_usdt
+
+paths = [['BTC', x, 'ETH', 'BTC'] for x in symbols_watch] + [['BTC', x, 'USDT', 'BTC'] for x in symbols_watch_usdt]
+
 
 remove_pairs = []
 
@@ -41,8 +52,8 @@ async def pairs():
 
     tickers = await binance_ex.fetch_tickers()
 
-    symbols = [market_name for market_name, ticker in tickers.items() if market_name.split('/')[0] in symbols_watch and
-               market_name.split('/')[1] in symbols_watch]
+    symbols = [market_name for market_name, ticker in tickers.items() if market_name.split('/')[0] in all_symbols and
+               market_name.split('/')[1] in all_symbols]
 
     return symbols
 
@@ -110,14 +121,17 @@ def order_book_sync(a_pair):
     bid_qtd = float(best_bid[key]['qtd'])
     return {'bids':[[bid_price, bid_qtd]], 'asks':[[ask_price, ask_qtd]]}
 
+
 all_pairs = loop.run_until_complete(pairs())
+
+# all_pairs.append('BTC/USDT')
 
 loop.run_until_complete(load_order_book_cold_start())
 
 all_pairs_decimal = loop.run_until_complete(pairs_decimal_fcoin())
 
 all_pairs_pre_fetch = [x for x in all_pairs
-                       if x.split('/')[0] in symbols_watch and x.split('/')[1] in symbols_watch]
+                       if x.split('/')[0] in all_symbols and x.split('/')[1] in all_symbols]
 all_pairs_topics = [f"{x.split('/')[0].lower()}{x.split('/')[1].lower()}" for
                     x in all_pairs_pre_fetch]
 
@@ -190,14 +204,6 @@ def convert_symbol_to_btc(a_symbol, input_amount):
 while True:
     try:
 
-        paths = [['BTC', 'VET', 'USDT', 'BTC'], ['BTC', 'VET', 'BNB', 'BTC'], ['BTC', 'VET', 'ETH', 'BTC'],
-                 ['VET', 'BTC', 'USDT', 'VET'], ['VET', 'BTC', 'BNB', 'VET'], ['VET', 'BTC', 'ETH', 'VET'],
-                 ['BTC', 'IOST', 'USDT', 'BTC'], ['BTC', 'IOST', 'BNB', 'BTC'], ['BTC', 'IOST', 'ETH', 'BTC'],
-                 ['IOST', 'BTC', 'USDT', 'IOST'], ['IOST', 'BTC', 'BNB', 'IOST'], ['IOST', 'BTC', 'ETH', 'IOST'],
-                 ['BTC', 'MATIC', 'USDT', 'BTC'], ['BTC', 'MATIC', 'BNB', 'BTC'],
-                 ['MATIC', 'BTC', 'USDT', 'MATIC'], ['MATIC', 'BTC', 'BNB', 'MATIC'],
-                 ['BTC', 'TRX', 'USDT', 'BTC'], ['BTC', 'TRX', 'BNB', 'BTC'], ['BTC', 'TRX', 'ETH', 'BTC'],
-                 ['TRX', 'BTC', 'USDT', 'TRX'], ['TRX', 'BTC', 'BNB', 'TRX'], ['TRX', 'BTC', 'ETH', 'TRX']]
 
         log_orders_exec = []
         profits_per_path = []
@@ -210,6 +216,7 @@ while True:
                 if i + 1 < len(path):
                     start = path[i]
                     end = path[i + 1]
+                    # print(start, end)
                     pair = [x for x in all_pairs if x == f'{start}/{end}' or x == f'{end}/{start}'][0]
                     selected_pairs.append(pair)
 
@@ -348,16 +355,16 @@ while True:
 
                         # print(f"amount:{start_amount} {start} --> {end}")
 
-                        if start == 'USDT':
-                            value_currency_usdt = 1.0
-                        else:
-                            order_book_usdt = loop.run_until_complete(order_book(f"{start}/USDT", 'fcoin'))
-                            value_currency_usdt = order_book_usdt['bids'][0][0]
+                        # if start == 'USDT':
+                        #     value_currency_usdt = 1.0
+                        # else:
+                        #     order_book_usdt = loop.run_until_complete(order_book(f"{start}/USDT", 'fcoin'))
+                        #     value_currency_usdt = order_book_usdt['bids'][0][0]
 
-                        if value_currency_usdt > max_value_usdt:
-                            min_pair = selected_pairs[i]
-                            min_cur_index = i
-                            max_value_usdt = value_currency_usdt
+                        # if value_currency_usdt > max_value_usdt:
+                        #     min_pair = selected_pairs[i]
+                        #     min_cur_index = i
+                        #     max_value_usdt = value_currency_usdt
                 return currencies_balance, min_pair, min_cur_index
 
 
@@ -384,16 +391,17 @@ while True:
 
             profit_iteration = 0.0
             for key, value in balance_adjusted.items():
-                if key != 'USDT':
-                    order_book_usdt = loop.run_until_complete(order_book(f"{key}/USDT", 'fcoin'))
-                    profit_iteration += value * order_book_usdt['bids'][0][0]
-                else:
-                    profit_iteration += value
+                value_btc = convert_symbol_to_btc(key, value)
+                order_book_usdt = loop.run_until_complete(order_book(f"BTC/USDT", ''))
+                value_usdt = value_btc * order_book_usdt['bids'][0][0]
+
+                profit_iteration += value_usdt
 
             # print(f"profit_iteration:{profit_iteration} {balance_adjusted}\n\n")
             profits_per_path.append((profit_iteration, amount_available_to_trade))
 
-        print_str = [f"{round(profits_per_path[i][0], 3)}" for i in range(len(paths))]
+        profits_per_path.sort(key=lambda x: x[0])
+        print_str = [f"{round(x[0], 8)}" for x in profits_per_path[-5:]]
         sys.stdout.write(f"{' | '.join(print_str)}  \r")
         sys.stdout.flush()
         res_list = [i for i in range(len(profits_per_path)) if profits_per_path[i][0] > 0.0]

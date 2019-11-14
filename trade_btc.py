@@ -426,7 +426,7 @@ while True:
                          f" {datetime.fromtimestamp(last_trades[-1]['ts']//1000)} "
                          f"{last_trades[0]['price']} {last_trades[-1]['price']}\n", flush=True)
             last_show_status = datetime.now()
-        if indicator > 0.60 and amplitude_value > 1.0002:
+        if indicator > 0.60 and amplitude_value > 1.0003:
 
             print(f"starting a long {indicator} amplitude_value:{amplitude_value}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))
@@ -460,7 +460,7 @@ while True:
             print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}")
             # sys.exit()
 
-        elif indicator < 0.40 and amplitude_value < 0.9998:
+        elif indicator < 0.40 and amplitude_value < 0.9997:
 
             print(f"starting a short {indicator} amplitude_value:{amplitude_value}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))

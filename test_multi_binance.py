@@ -157,6 +157,36 @@ profit_acc = 0.0
 pair_to_remove = []
 
 
+def convert_btc_to_symbol(a_symbol, input_amount):
+    global all_pairs
+    if a_symbol != 'BTC':
+        pair_filter = [x for x in all_pairs if x == f'{a_symbol}/BTC' or x == f'BTC/{a_symbol}'][0]
+        order_book_btc = loop.run_until_complete(order_book(pair_filter, 'fcoin'))
+        if a_symbol == pair_filter.split('/')[0]:
+            result_amount = input_amount / order_book_btc['asks'][0][0]
+        else:
+            result_amount = input_amount * order_book_btc['bids'][0][0]
+    else:
+        result_amount = input_amount
+
+    return result_amount
+
+
+def convert_symbol_to_btc(a_symbol, input_amount):
+    global all_pairs
+    if a_symbol != 'BTC':
+        pair_filter = [x for x in all_pairs if x == f'{a_symbol}/BTC' or x == f'BTC/{a_symbol}'][0]
+        order_book_btc = loop.run_until_complete(order_book(pair_filter, 'fcoin'))
+        if a_symbol == pair_filter.split('/')[0]:
+            result_amount = input_amount * order_book_btc['bids'][0][0]
+        else:
+            result_amount = input_amount / order_book_btc['asks'][0][0]
+    else:
+        result_amount = input_amount
+
+    return result_amount
+
+
 while True:
     try:
 
@@ -192,10 +222,12 @@ while True:
             pair_precision = None
             index_pair_precision = None
 
+            amount_available_to_trade = None
+
             valid = False
 
             def amount_path(start_amount, path_input, start_index=0, inverted=False, precision=False):
-                global valid
+                global valid, amount_available_to_trade
                 min_pair = None
                 min_cur_index = None
                 precision_balance = 18
@@ -228,9 +260,14 @@ while True:
 
                         last_amount = start_amount
 
-
                         if start == base_currency and end == quote_currency:
                             amount_available = order_book_result['bids'][0][1]
+                            amount_available_btc = convert_symbol_to_btc(start, amount_available)
+                            # print(f"Available:{amount_available} converted btc:{amount_available_btc}")
+
+                            if amount_available_to_trade is None or amount_available_btc < amount_available_to_trade:
+                                amount_available_to_trade = amount_available_btc
+
                             if precision:
                                 start_amount = round(start_amount, all_pairs_decimal[selected_pair])
                                 log_message_start = (f"BALANCE START SELL:{start} previous:{currencies_balance.get(start, 0.0)} - {start_amount}"
@@ -254,8 +291,12 @@ while True:
                             start_amount = fee * start_amount * order_book_result['bids'][0][0]
 
                         elif start == quote_currency and end == base_currency:
-
                             amount_available = order_book_result['asks'][0][1]
+                            amount_available_btc = convert_symbol_to_btc(end, amount_available)
+                            # print(f"Available:{amount_available} converted btc:{amount_available_btc}")
+
+                            if amount_available_to_trade is None or amount_available_btc < amount_available_to_trade:
+                                amount_available_to_trade = amount_available_btc
 
                             if start_amount / order_book_result['asks'][0][0] > amount_available:
                                 valid = False
@@ -321,18 +362,17 @@ while True:
             balance_adjusted = None
             for a_amount in start_amounts:
                 valid = True
-                if path[0] != 'BTC':
-                    pair = [x for x in all_pairs if x == f'{path[0]}/BTC' or x == f'BTC/{path[0]}'][0]
-                    order_book_btc = loop.run_until_complete(order_book(pair, 'fcoin'))
-                    if path[0] == pair.split('/')[0]:
-                        start_amount = a_amount / order_book_btc['asks'][0][0]
-                    else:
-                        start_amount = a_amount * order_book_btc['bids'][0][0]
-                else:
-                    start_amount = a_amount
+
+                start_amount = convert_btc_to_symbol(path[0], a_amount)
 
                 balances, pair_precision, index_pair_precision = amount_path(start_amount, path, precision=True)
+
+                start_amount = convert_btc_to_symbol(path[0], amount_available_to_trade)
+                # print(f"Now using amount_available_to_trade:{amount_available_to_trade} btc using start_amount:{start_amount} {path[0]}")
+                # if not valid:
+                balances, pair_precision, index_pair_precision = amount_path(start_amount, path, precision=True)
                 balance_adjusted = balances
+                # print(f"\n\n")
 
                 # balance = start_amount - first
                 if valid:
@@ -349,14 +389,18 @@ while True:
                     profit_iteration += value
 
             # print(f"profit_iteration:{profit_iteration} {balance_adjusted}\n\n")
-            profits_per_path.append(profit_iteration)
+            profits_per_path.append((profit_iteration, amount_available_to_trade))
 
-        print_str = [f"{round(profits_per_path[i], 3)}" for i in range(len(paths))]
+        print_str = [f"{round(profits_per_path[i][0], 3)}" for i in range(len(paths))]
         sys.stdout.write(f"{' | '.join(print_str)}  \r")
         sys.stdout.flush()
-        res_list = [i for i in range(len(profits_per_path)) if profits_per_path[i] > 0.0]
+        res_list = [i for i in range(len(profits_per_path)) if profits_per_path[i][0] > 0.0]
         if len(res_list) > 0:
-            print(f"found profit!!! {res_list} {[profits_per_path[i] for i in res_list]} amount:{max_amount} valid:{valid}\n\n")
+            with open('found-binance.txt', 'a') as file:
+                print(f"found profit!!! {res_list} {[profits_per_path[i] for i in res_list]} amount:{max_amount} valid:{valid}\n\n")
+                file.write(f"found profit!!! {res_list} {[profits_per_path[i] for i in res_list]} amount:{max_amount} valid:{valid}\n\n")
+                file.flush()
+
 
 
     except Exception as ex:

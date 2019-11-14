@@ -41,7 +41,7 @@ class HandleWebsocket(WebsocketClient):
 
 
 last_trades = []
-back_time_limit_seconds = 300
+back_time_limit_seconds = 20
 
 
 def filter_last_trades():
@@ -408,7 +408,7 @@ time.sleep(back_time_limit_seconds)
 
 last_show_status = datetime.now()
 
-wait_time_until_finish_seconds = 10
+wait_time_until_finish_seconds = 7
 
 while True:
     try:

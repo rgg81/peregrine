@@ -25,7 +25,7 @@ class HandleWebsocket(WebsocketClient):
         # print(f'Symbol:{symbol} {ask_price} {ask_qtd} {bid_price} {bid_qtd}')
 
 
-symbols_watch = ['BTC', 'USDT', 'VET', 'BNB', 'ETH', 'IOST', 'MATIC']
+symbols_watch = ['BTC', 'USDT', 'VET', 'BNB', 'ETH', 'IOST', 'MATIC', 'TRX']
 
 remove_pairs = []
 

@@ -412,17 +412,18 @@ while True:
         symbol_use = 'BTC/USDT'
         symbol_transformed = f"{symbol_use.replace('/', '').lower()}"
         indicator = power_trades()
+        amplitude_value = amplitude()
 
         # print(last_trades)
         if datetime.now() > last_show_status + timedelta(seconds=5):
-            print(f"indicator:{indicator} {len(last_trades)} "
+            print(f"indicator:{indicator} amplitude_value:{amplitude_value} {len(last_trades)} "
                          f"{datetime.fromtimestamp(last_trades[0]['ts']//1000)}"
                          f" {datetime.fromtimestamp(last_trades[-1]['ts']//1000)} "
                          f"{last_trades[0]['price']} {last_trades[-1]['price']}\n", flush=True)
             last_show_status = datetime.now()
-        if indicator > 0.60:
+        if indicator > 0.55 and amplitude_value > 1.0015:
 
-            print(f"starting a long {indicator}")
+            print(f"starting a long {indicator} amplitude_value:{amplitude_value}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'buy', 'symbol': symbol_transformed,
                                     'amount': amount_btc_minimum,
@@ -450,9 +451,9 @@ while True:
             print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}")
             # sys.exit()
 
-        elif indicator < 0.40:
+        elif indicator < 0.45 and amplitude_value < 0.9985:
 
-            print(f"starting a short {indicator}")
+            print(f"starting a short {indicator} amplitude_value:{amplitude_value}")
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'sell', 'symbol': symbol_transformed,
                           'amount': amount_btc_minimum,

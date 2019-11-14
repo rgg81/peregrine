@@ -400,10 +400,10 @@ while True:
             # print(f"profit_iteration:{profit_iteration} {balance_adjusted}\n\n")
             profits_per_path.append((profit_iteration, amount_available_to_trade))
 
-        profits_per_path.sort(key=lambda x: x[0])
-        print_str = [f"{round(x[0], 8)}" for x in profits_per_path[-5:]]
-        sys.stdout.write(f"{' | '.join(print_str)}  \r")
-        sys.stdout.flush()
+        # profits_per_path.sort(key=lambda x: x[0])
+        # print_str = [f"{round(x[0], 8)}" for x in profits_per_path[-5:]]
+        # sys.stdout.write(f"{' | '.join(print_str)}  \r")
+        # sys.stdout.flush()
         res_list = [i for i in range(len(profits_per_path)) if profits_per_path[i][0] > 0.0]
         if len(res_list) > 0:
             with open('found-binance.txt', 'a') as file:

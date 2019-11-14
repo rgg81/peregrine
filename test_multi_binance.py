@@ -25,7 +25,7 @@ class HandleWebsocket(WebsocketClient):
         # print(f'Symbol:{symbol} {ask_price} {ask_qtd} {bid_price} {bid_qtd}')
 
 
-symbols_watch = ['BTC', 'USDT', 'VET', 'BNB', 'ETH', 'IOST']
+symbols_watch = ['BTC', 'USDT', 'VET', 'BNB', 'ETH', 'IOST', 'MATIC']
 
 remove_pairs = []
 
@@ -163,7 +163,9 @@ while True:
         paths = [['BTC', 'VET', 'USDT', 'BTC'], ['BTC', 'VET', 'BNB', 'BTC'], ['BTC', 'VET', 'ETH', 'BTC'],
                  ['VET', 'BTC', 'USDT', 'VET'], ['VET', 'BTC', 'BNB', 'VET'], ['VET', 'BTC', 'ETH', 'VET'],
                  ['BTC', 'IOST', 'USDT', 'BTC'], ['BTC', 'IOST', 'BNB', 'BTC'], ['BTC', 'IOST', 'ETH', 'BTC'],
-                 ['IOST', 'BTC', 'USDT', 'IOST'], ['IOST', 'BTC', 'BNB', 'IOST'], ['IOST', 'BTC', 'ETH', 'IOST']]
+                 ['IOST', 'BTC', 'USDT', 'IOST'], ['IOST', 'BTC', 'BNB', 'IOST'], ['IOST', 'BTC', 'ETH', 'IOST'],
+                 ['BTC', 'MATIC', 'USDT', 'BTC'], ['BTC', 'MATIC', 'BNB', 'BTC'],
+                 ['MATIC', 'BTC', 'USDT', 'MATIC'], ['MATIC', 'BTC', 'BNB', 'MATIC']]
 
         log_orders_exec = []
         profits_per_path = []

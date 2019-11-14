@@ -468,6 +468,10 @@ while True:
             balance_result_sell = submit_orders_arb(log_order, enter_order=True)
             print(balance_result_sell)
 
+            if force_stop:
+                print(f"Restarting loop since force stop is true")
+                continue
+
             time.sleep(wait_time_until_finish_seconds)
 
             order_book_result = loop.run_until_complete(order_book(symbol_use))

@@ -175,7 +175,7 @@ def convert_btc_to_symbol(a_symbol, input_amount):
     global all_pairs
     if a_symbol != 'BTC':
         pair_filter = [x for x in all_pairs if x == f'{a_symbol}/BTC' or x == f'BTC/{a_symbol}'][0]
-        order_book_btc = loop.run_until_complete(order_book(pair_filter, 'fcoin'))
+        order_book_btc = order_book_sync(pair_filter)
         if a_symbol == pair_filter.split('/')[0]:
             result_amount = input_amount / order_book_btc['asks'][0][0]
         else:
@@ -190,7 +190,7 @@ def convert_symbol_to_btc(a_symbol, input_amount):
     global all_pairs
     if a_symbol != 'BTC':
         pair_filter = [x for x in all_pairs if x == f'{a_symbol}/BTC' or x == f'BTC/{a_symbol}'][0]
-        order_book_btc = loop.run_until_complete(order_book(pair_filter, 'fcoin'))
+        order_book_btc = order_book_sync(pair_filter)
         if a_symbol == pair_filter.split('/')[0]:
             result_amount = input_amount * order_book_btc['bids'][0][0]
         else:
@@ -392,7 +392,7 @@ while True:
             profit_iteration = 0.0
             for key, value in balance_adjusted.items():
                 value_btc = convert_symbol_to_btc(key, value)
-                order_book_usdt = loop.run_until_complete(order_book(f"BTC/USDT", ''))
+                order_book_usdt = order_book_sync(f"BTC/USDT")
                 value_usdt = value_btc * order_book_usdt['bids'][0][0]
 
                 profit_iteration += value_usdt
@@ -407,8 +407,8 @@ while True:
         res_list = [i for i in range(len(profits_per_path)) if profits_per_path[i][0] > 0.0]
         if len(res_list) > 0:
             with open('found-binance.txt', 'a') as file:
-                print(f"found profit!!! {res_list} {[profits_per_path[i] for i in res_list]} amount:{max_amount} valid:{valid}\n\n")
-                file.write(f"found profit!!! {res_list} {[profits_per_path[i] for i in res_list]} amount:{max_amount} valid:{valid}\n\n")
+                print(f"found profit!!! {res_list} {[(profits_per_path[i], paths[i]) for i in res_list]} \n\n", flush=True)
+                file.write(f"found profit!!! {res_list} {[(profits_per_path[i], paths[i]) for i in res_list]} \n\n")
                 file.flush()
 
 

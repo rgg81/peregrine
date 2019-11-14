@@ -195,7 +195,9 @@ while True:
                  ['BTC', 'IOST', 'USDT', 'BTC'], ['BTC', 'IOST', 'BNB', 'BTC'], ['BTC', 'IOST', 'ETH', 'BTC'],
                  ['IOST', 'BTC', 'USDT', 'IOST'], ['IOST', 'BTC', 'BNB', 'IOST'], ['IOST', 'BTC', 'ETH', 'IOST'],
                  ['BTC', 'MATIC', 'USDT', 'BTC'], ['BTC', 'MATIC', 'BNB', 'BTC'],
-                 ['MATIC', 'BTC', 'USDT', 'MATIC'], ['MATIC', 'BTC', 'BNB', 'MATIC']]
+                 ['MATIC', 'BTC', 'USDT', 'MATIC'], ['MATIC', 'BTC', 'BNB', 'MATIC'],
+                 ['BTC', 'TRX', 'USDT', 'BTC'], ['BTC', 'TRX', 'BNB', 'BTC'], ['BTC', 'TRX', 'ETH', 'BTC'],
+                 ['TRX', 'BTC', 'USDT', 'TRX'], ['TRX', 'BTC', 'BNB', 'TRX'], ['TRX', 'BTC', 'ETH', 'TRX']]
 
         log_orders_exec = []
         profits_per_path = []

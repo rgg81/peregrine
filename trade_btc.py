@@ -184,6 +184,7 @@ async def change_price(order_detail, price, symbol_complete, enter_order=False):
         return None
     elif enter_order:
         print(f"Since this order is an entry order.. will cancel and not change price..")
+        force_stop = True
         return None
     else:
         total_amount = float(order_detail['data']['amount'])

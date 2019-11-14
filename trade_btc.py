@@ -405,7 +405,7 @@ time.sleep(back_time_limit_seconds)
 
 last_show_status = datetime.now()
 
-wait_time_until_finish_seconds = 15
+wait_time_until_finish_seconds = 10
 
 while True:
     try:

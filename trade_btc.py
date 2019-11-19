@@ -6,13 +6,16 @@ from threading import Thread
 from datetime import datetime, timedelta
 from peregrinearb import create_weighted_multi_exchange_digraph, print_profit_opportunity_for_path_multi,\
     bellman_ford_multi, best_ask, best_bid
-from ccxt import async_support as ccxt
+# from ccxt import async_support as ccxt
 import traceback
 import sys
 
 
 go_long = False
 go_short = False
+
+exit_long = False
+exit_short = False
 
 class HandleWebsocket(WebsocketClient):
     def handle(self,msg):
@@ -42,6 +45,13 @@ class HandleWebsocket(WebsocketClient):
 
 
 last_trades = []
+
+result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
+result.sort(key=lambda x: x['id'])
+# print(f"{result}")
+
+last_trades = result[:-1]
+
 back_time_limit_seconds = 60
 
 
@@ -52,17 +62,27 @@ def filter_last_trades():
     last_trades = [x for x in last_trades if x['ts'] > millis_past_minute]
 
 
+ma_short_freq = 7
+ma_long_freq = 30
+
 class HandleWebsocketTrade(WebsocketClient):
 
     open_price = None
     close_price = None
     last_ts = None
     last_go_long = False
-    last_go_short = False
+    last_message = None
+
+    is_up_ma_short = None
+    is_down_ma_short = None
+
+    is_short_cross_up = None
+    is_short_cross_down = None
+
 
 
     def handle(self,msg):
-        global go_short, go_long
+        global go_short, go_long, last_trades, exit_long, exit_short
 
         # print('receive message')
         for key, value in msg.items():
@@ -75,20 +95,50 @@ class HandleWebsocketTrade(WebsocketClient):
                 if self.last_ts is None:
                     self.last_ts = msg['id']
                 if msg['id'] > self.last_ts:
-                    check_long = self.close_price > self.open_price
-                    go_long = check_long and self.last_go_long
 
-                    check_short = self.close_price < self.open_price
-                    go_short = check_short and self.last_go_short
+                    ma_short_before = moving_average(ma_short_freq)
+                    ma_long_before = moving_average(ma_long_freq)
 
-                    print(f"close:{self.close_price} open:{self.open_price} ts:{self.last_ts}", flush=True)
-                    self.last_go_long = check_long
-                    self.last_go_short = check_short
+                    short_below_long_before = ma_short_before < ma_long_before
+                    short_above_long_before = ma_short_before > ma_long_before
+
+                    last_trades.append(self.last_message)
+                    last_trades = last_trades[-40:]
+
+                    ma_short = moving_average(ma_short_freq)
+                    ma_long = moving_average(ma_long_freq)
+
+                    short_below_long = ma_short < ma_long
+                    short_above_long = ma_short > ma_long
+
+                    self.is_up_ma_short = ma_short >= ma_short_before
+                    self.is_down_ma_short = ma_short <= ma_short_before
+
+                    self.is_short_cross_up = short_below_long_before and short_above_long
+                    self.is_short_cross_down = short_above_long_before and short_below_long
+
+                    go_long = self.is_up_ma_short and self.is_short_cross_up
+                    go_short = self.is_down_ma_short and self.is_short_cross_down
+
+                    exit_long = self.is_short_cross_down
+                    exit_short = self.is_short_cross_up
+
+
+                    print(f"close:{self.close_price} open:{self.open_price} ts:{self.last_ts} "
+                          f"last:{self.last_message} is_up_ma_short:{self.is_up_ma_short} "
+                          f"is_down_ma_short:{self.is_down_ma_short} is_short_cross_up:{self.is_short_cross_up} "
+                          f"is_short_cross_down:{self.is_short_cross_down}", flush=True)
+                    # self.last_go_long = check_long
+                    # self.last_go_short = check_short
                     self.last_ts = msg['id']
-                    
-                self.open_price = msg['open']
-                self.close_price = msg['close']
+                self.last_message = msg
 
+
+def moving_average(steps_back):
+    global last_trades
+    candles = last_trades[-steps_back:]
+    candles_close_price = [x['close'] for x in candles]
+    return sum(candles_close_price)/len(candles_close_price)
 
 def power_trades():
     global last_trades
@@ -149,12 +199,7 @@ symbols_watch = ['BTC', 'USDT']
 
 remove_pairs = []
 
-exchange_list = [{'object': getattr(ccxt, exchange_name)(),
-                  'fee': fee_config[exchange_name]} for exchange_name in exchange_names]
 loop = asyncio.get_event_loop()
-
-for exchange_name in exchange_names:
-    loop.run_until_complete(exchange_list[exchange_names.index(exchange_name)]['object'].load_markets())
 
 api_auth = fcoin.authorize(key_fcoin, secret_fcoin)
 
@@ -351,16 +396,6 @@ def submit_orders_arb(log_orders, enter_order=False):
     #sys.exit()
 
 
-async def pairs():
-    global loop
-    all_symbols = []
-    for exchange_name in exchange_names:
-        index = exchange_names.index(exchange_name)
-        symbols = [x for x in exchange_list[index]['object'].symbols if x not in remove_pairs]
-        all_symbols = list(set().union(all_symbols, symbols))
-    return all_symbols
-
-
 async def pairs_decimal_fcoin():
     currencies = fcoin.Api().symbols()
     result_dict = {}
@@ -368,16 +403,6 @@ async def pairs_decimal_fcoin():
     for x in currencies['data']:
         result_dict[f"{x['base_currency'].upper()}/{x['quote_currency'].upper()}"] = x['amount_decimal']
     return result_dict
-
-
-async def pairs_usdt():
-    # binance_ex = getattr(ccxt, 'binance')()
-    hitbtc_ex = getattr(ccxt, 'hitbtc2')()
-    # tickers_binance = await binance_ex.fetch_tickers()
-    tickers_hitbtc = await hitbtc_ex.fetch_tickers()
-    # tickers = list(tickers_binance.items()) + list(tickers_hitbtc.items())
-    tickers = list(tickers_hitbtc.items())
-    return [x for x in tickers if 'USDT' in x[0] and x[0] not in remove_pairs]
 
 
 async def order_book(a_pair):
@@ -392,9 +417,9 @@ async def order_book(a_pair):
     return {'bids':[[bid_price, bid_qtd]], 'asks':[[ask_price, ask_qtd]]}
 
 
-all_pairs = loop.run_until_complete(pairs())
-
 all_pairs_decimal = loop.run_until_complete(pairs_decimal_fcoin())
+
+all_pairs = ['BTC/USDT']
 
 all_pairs_pre_fetch = [x for x in all_pairs
                        if x.split('/')[0] in symbols_watch and x.split('/')[1] in symbols_watch]
@@ -423,11 +448,9 @@ sub2 = ws2.sub
 Thread(target=sub,args=(topics,)).start()
 Thread(target=sub2,args=(topics_trades,)).start()
 
-all_pairs_usdt = loop.run_until_complete(pairs_usdt())
+
 # fee = 1 - exchange.fees['trading']['taker']
 # fee = 1 - 0.0006
-
-print([exchange['fee'] for exchange in exchange_list])
 
 profit_acc = 0.0
 pair_to_remove = []
@@ -450,12 +473,14 @@ while True:
         # amplitude_value = amplitude()
 
         # print(last_trades)
-        # if datetime.now() > last_show_status + timedelta(seconds=5):
+        if datetime.now() > last_show_status + timedelta(seconds=20):
+            print(f"last_trades:{[x['id'] for x in last_trades[-3:]]}")
+            print(f"MA 7:{moving_average(ma_short_freq)} MA 30:{moving_average(ma_long_freq)}")
         #     print(f"indicator:{indicator} amplitude_value:{amplitude_value} {len(last_trades)} "
         #                  f"{datetime.fromtimestamp(last_trades[0]['ts']//1000)}"
         #                  f" {datetime.fromtimestamp(last_trades[-1]['ts']//1000)} "
         #                  f"{last_trades[0]['price']} {last_trades[-1]['price']}\n", flush=True)
-        #     last_show_status = datetime.now()
+            last_show_status = datetime.now()
         if go_long:
             go_long = False
             print(f"starting a long", flush=True)
@@ -472,7 +497,8 @@ while True:
                 print(f"Restarting loop since force stop is true")
                 continue
 
-            time.sleep(wait_time_until_finish_seconds)
+            while not exit_long:
+                pass
 
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'sell', 'symbol': symbol_transformed,
@@ -506,7 +532,8 @@ while True:
                 print(f"Restarting loop since force stop is true")
                 continue
 
-            time.sleep(wait_time_until_finish_seconds)
+            while not exit_short:
+                pass
 
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'buy', 'symbol': symbol_transformed,

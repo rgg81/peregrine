@@ -439,7 +439,7 @@ amount_btc_minimum = 0.005
 
 last_show_status = datetime.now()
 
-wait_time_until_finish_seconds = 60
+wait_time_until_finish_seconds = 50
 
 while True:
     try:

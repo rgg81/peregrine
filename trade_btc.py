@@ -66,6 +66,7 @@ class HandleWebsocketTrade(WebsocketClient):
 
         # print('receive message')
         for key, value in msg.items():
+            #print(f'message received', flush=True)
             if key == 'type' and value == 'ping':
                 print(f'Received ping event.. connection is good', flush=True)
             elif key == 'type' and 'candle' not in value:
@@ -80,7 +81,7 @@ class HandleWebsocketTrade(WebsocketClient):
                     check_short = self.close_price < self.open_price
                     go_short = check_short and self.last_go_short
 
-                    print(f"close:{self.close_price} open:{self.open_price} ts:{self.last_ts}")
+                    print(f"close:{self.close_price} open:{self.open_price} ts:{self.last_ts}", flush=True)
                     self.last_go_long = check_long
                     self.last_go_short = check_short
                     self.last_ts = msg['id']

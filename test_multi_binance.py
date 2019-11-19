@@ -27,15 +27,24 @@ class HandleWebsocket(WebsocketClient):
 
 symbols_base = ['BTC', 'ETH', 'USDT']
 
-symbols_watch = ['VET', 'IOST', 'TRX', 'HOT', 'MFT', 'STORM', 'KEY', 'SC', 'XVG', 'ZIL', 'DATA',
+symbols_watch = ['VET', 'IOST', 'TRX', 'HOT', 'MFT', 'STORM', 'KEY', 'XVG', 'ZIL', 'DATA',
                  'LEND', 'ADA', 'CMT', 'VIB', 'XLM', 'TNT', 'FUN',
-                 'IOTX', 'QKC', 'DOCK', 'NEO', 'BNB', 'LINK', 'QTUM', 'BAT', 'IOTA']
+                 'IOTX', 'QKC', 'DOCK', 'NEO', 'LINK', 'QTUM', 'BAT', 'IOTA',
+                 'ONT', 'XRP', 'BQX', 'ADA', 'XRP', 'EOS', 'ENG']
 
-symbols_watch_usdt = ['ARPA', 'VET', 'ERD', 'COCOS', 'DOGE', 'MATIC', 'FET', 'NKN', 'BAT']
+
+symbols_watch_usdt = ['ARPA', 'VET', 'ERD', 'DOGE', 'MATIC', 'FET', 'NKN', 'BAT', 'XTZ', 'TRX', 'IOST']
+
+# symbols_watch = ['VET', 'IOST', 'TRX', 'ADA', 'VIB']
+
+
+# symbols_watch_usdt = ['VET', 'ADA', 'HOT', 'TRX', 'NCASH', 'ENG']
 
 all_symbols = symbols_base + symbols_watch + symbols_watch_usdt
 
 paths = [['BTC', x, 'ETH', 'BTC'] for x in symbols_watch] + [['BTC', x, 'USDT', 'BTC'] for x in symbols_watch_usdt]
+
+# paths = [['ETH', x, 'BTC', 'ETH'] for x in symbols_watch_usdt]
 
 
 remove_pairs = []
@@ -204,7 +213,7 @@ def convert_symbol_to_btc(a_symbol, input_amount):
 while True:
     try:
 
-
+        # start_time = datetime.now()
         log_orders_exec = []
         profits_per_path = []
         for path in paths:
@@ -270,7 +279,13 @@ while True:
                         last_amount = start_amount
 
                         if start == base_currency and end == quote_currency:
-                            amount_available = order_book_result['bids'][0][1]
+
+                            if i == 0:
+                                aggression = 'asks'
+                            else:
+                                aggression = 'bids'
+
+                            amount_available = order_book_result[aggression][0][1]
                             amount_available_btc = convert_symbol_to_btc(start, amount_available)
                             # print(f"Available:{amount_available} converted btc:{amount_available_btc}")
 
@@ -281,10 +296,12 @@ while True:
                                 start_amount = round(start_amount, all_pairs_decimal[selected_pair])
                                 log_message_start = (f"BALANCE START SELL:{start} previous:{currencies_balance.get(start, 0.0)} - {start_amount}"
                                                      f" now:{round(currencies_balance.get(start, 0.0) - start_amount, precision_balance)}")
-                                start_amount_str = f"{fee} * {start_amount} * {order_book_result['bids'][0][0]}"
+                                start_amount_str = f"{fee} * {start_amount} * {order_book_result[aggression][0][0]}"
 
-                                log_orders_exec.append({'side': 'sell', 'symbol': selected_pair, 'amount': start_amount,
-                                                        'price': order_book_result['bids'][0][0]})
+                                symbol_transformed = f"{selected_pair.replace('/', '').lower()}"
+                                log_orders_exec.append({'side': 'sell', 'symbol': symbol_transformed, 'amount': start_amount,
+                                                        'price': order_book_result[aggression][0][0],
+                                                        'symbol_complete': selected_pair})
 
                                 # print(f"Using precision amount is:{start_amount} start:{start} end:{end}")
                             currencies_balance[start] = round(currencies_balance.get(start, 0.0) - start_amount,
@@ -297,17 +314,23 @@ while True:
                                     # print('Pair not met the minimum.. deleting')
                                     pair_to_remove.append((selected_pair, datetime.now()))
 
-                            start_amount = fee * start_amount * order_book_result['bids'][0][0]
+                            start_amount = fee * start_amount * order_book_result[aggression][0][0]
 
                         elif start == quote_currency and end == base_currency:
-                            amount_available = order_book_result['asks'][0][1]
+
+                            if i == 0:
+                                aggression = 'bids'
+                            else:
+                                aggression = 'asks'
+
+                            amount_available = order_book_result[aggression][0][1]
                             amount_available_btc = convert_symbol_to_btc(end, amount_available)
                             # print(f"Available:{amount_available} converted btc:{amount_available_btc}")
 
                             if amount_available_to_trade is None or amount_available_btc < amount_available_to_trade:
                                 amount_available_to_trade = amount_available_btc
 
-                            if start_amount / order_book_result['asks'][0][0] > amount_available:
+                            if start_amount / order_book_result[aggression][0][0] > amount_available:
                                 valid = False
                                 if a_amount == start_amounts[0]:
                                     # print('Pair not met the minimum.. deleting')
@@ -316,9 +339,9 @@ while True:
                             if precision:
 
                                 previous_balance_start = currencies_balance.get(start, 0.0)
-                                amount_less_fee = round(start_amount / order_book_result['asks'][0][0],
+                                amount_less_fee = round(start_amount / order_book_result[aggression][0][0],
                                                         all_pairs_decimal[selected_pair])
-                                total = amount_less_fee * order_book_result['asks'][0][0]
+                                total = amount_less_fee * order_book_result[aggression][0][0]
                                 currencies_balance[start] = round(currencies_balance.get(start, 0.0) - total
                                                                   ,
                                                                   precision_balance)
@@ -326,20 +349,22 @@ while True:
                                 log_message_start = (f"BALANCE START BUY:{start} previous:{previous_balance_start} - {total}"
                                                      f" now:{currencies_balance[start]} --> calc total:"
                                                      f"{amount_less_fee} "
-                                                     f"* {order_book_result['asks'][0][0]}")
+                                                     f"* {order_book_result[aggression][0][0]}")
 
-                                start_amount_str = f"{fee} * {amount_less_fee} = {fee} * round({start_amount} / {order_book_result['asks'][0][0]},{all_pairs_decimal[selected_pair]})"
+                                start_amount_str = f"{fee} * {amount_less_fee} = {fee} * round({start_amount} / {order_book_result[aggression][0][0]},{all_pairs_decimal[selected_pair]})"
 
-                                log_orders_exec.append({'side': 'buy', 'symbol': selected_pair,
+                                symbol_transformed = f"{selected_pair.replace('/', '').lower()}"
+                                log_orders_exec.append({'side': 'buy', 'symbol': symbol_transformed,
                                                         'amount': amount_less_fee,
-                                                        'price': order_book_result['asks'][0][0]})
+                                                        'price': order_book_result[aggression][0][0],
+                                                        'symbol_complete': selected_pair})
 
                                 start_amount = fee * amount_less_fee
 
                             else:
                                 currencies_balance[start] = round(currencies_balance.get(start, 0.0) - start_amount,
                                                                   precision_balance)
-                                start_amount = fee * start_amount / order_book_result['asks'][0][0]
+                                start_amount = fee * start_amount / order_book_result[aggression][0][0]
                         else:
                             raise Exception(f'error in...{start} == {base_currency} and {end} == {quote_currency}')
 
@@ -353,18 +378,6 @@ while True:
                             print(f"Start amount:{last_amount} converted:{start_amount} start:{start} end:{end}")
 
 
-                        # print(f"amount:{start_amount} {start} --> {end}")
-
-                        # if start == 'USDT':
-                        #     value_currency_usdt = 1.0
-                        # else:
-                        #     order_book_usdt = loop.run_until_complete(order_book(f"{start}/USDT", 'fcoin'))
-                        #     value_currency_usdt = order_book_usdt['bids'][0][0]
-
-                        # if value_currency_usdt > max_value_usdt:
-                        #     min_pair = selected_pairs[i]
-                        #     min_cur_index = i
-                        #     max_value_usdt = value_currency_usdt
                 return currencies_balance, min_pair, min_cur_index
 
 
@@ -398,18 +411,27 @@ while True:
                 profit_iteration += value_usdt
 
             # print(f"profit_iteration:{profit_iteration} {balance_adjusted}\n\n")
-            profits_per_path.append((profit_iteration, amount_available_to_trade))
+            profits_per_path.append((profit_iteration, amount_available_to_trade, path))
 
-        # profits_per_path.sort(key=lambda x: x[0])
-        # print_str = [f"{round(x[0], 8)}" for x in profits_per_path[-5:]]
-        # sys.stdout.write(f"{' | '.join(print_str)}  \r")
-        # sys.stdout.flush()
+        # profits_per_path = [x for x in profits_per_path if x[0] > 0.0]
+
+        profits_per_path.sort(key=lambda x: x[0])
+
+        # profits_per_path = [x for x in profits_per_path if 'VET' in x[2] or 'XGV' in x[2]
+        #                     or 'ZIL' in x[2] or 'IOST' in x[2]]
+        print_str = [f"{round(x[0], 3)} {','.join(x[2][0:2])}" for x in profits_per_path[-10:]]
+        sys.stdout.write(f"{' | '.join(print_str)}  \r")
+        sys.stdout.flush()
         res_list = [i for i in range(len(profits_per_path)) if profits_per_path[i][0] > 0.0]
-        if len(res_list) > 0:
-            with open('found-binance.txt', 'a') as file:
-                print(f"found profit!!! {res_list} {[(profits_per_path[i], paths[i]) for i in res_list]} \n\n", flush=True)
-                file.write(f"found profit!!! {res_list} {[(profits_per_path[i], paths[i]) for i in res_list]} \n\n")
-                file.flush()
+        # if len(res_list) > 0:
+        #     with open('found-binance.txt', 'a') as file:
+        #     print(f"found profit!!! {res_list} {[(profits_per_path[i], paths[i]) for i in res_list]} \n\n", flush=True)
+        #         file.write(f"found profit!!! {res_list} {[(profits_per_path[i], paths[i]) for i in res_list]} \n\n")
+        #         file.flush()
+
+        # end_time = datetime.now()
+        # delta = end_time - start_time
+        # print(f"took:{delta.microseconds}")
 
 
 

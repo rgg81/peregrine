@@ -11,7 +11,8 @@ import traceback
 import sys
 
 
-
+go_long = False
+go_short = False
 
 class HandleWebsocket(WebsocketClient):
     def handle(self,msg):
@@ -52,17 +53,40 @@ def filter_last_trades():
 
 
 class HandleWebsocketTrade(WebsocketClient):
+
+    open_price = None
+    close_price = None
+    last_ts = None
+    last_go_long = False
+    last_go_short = False
+
+
     def handle(self,msg):
+        global go_short, go_long
 
         # print('receive message')
         for key, value in msg.items():
             if key == 'type' and value == 'ping':
                 print(f'Received ping event.. connection is good', flush=True)
-            elif key == 'type' and 'trade' not in value:
+            elif key == 'type' and 'candle' not in value:
                 print(f'event not identified:{value}')
-            elif key == 'type' and value == 'trade.btcusdt':
-                last_trades.append(msg)
-                filter_last_trades()
+            elif key == 'type' and value == 'candle.M1.btcusdt':
+                if self.last_ts is None:
+                    self.last_ts = msg['id']
+                if msg['id'] > self.last_ts:
+                    check_long = self.close_price > self.open_price
+                    go_long = check_long and self.last_go_long
+
+                    check_short = self.close_price < self.open_price
+                    go_short = check_short and self.last_go_short
+
+                    print(f"close:{self.close_price} open:{self.open_price} ts:{self.last_ts}")
+                    self.last_go_long = check_long
+                    self.last_go_short = check_short
+                    self.last_ts = msg['id']
+                    
+                self.open_price = msg['open']
+                self.close_price = msg['close']
 
 
 def power_trades():
@@ -261,7 +285,7 @@ def submit_orders_arb(log_orders, enter_order=False):
     print(f"wait_seconds_time:{wait_seconds_time}")
     time.sleep(wait_seconds_time)
     orders_details = get_details_orders(orders_id)
-    print(f"Orders details:{orders_details}")
+    print(f"Orders details:{orders_details}", flush=True)
 
     while not all(check_log_item_amount(item, orders_details) for item in log_orders) and not force_stop:
         not_total_filled = [x for x in log_orders if not check_log_item_amount(x, orders_details)]
@@ -277,13 +301,13 @@ def submit_orders_arb(log_orders, enter_order=False):
             except Exception as ex:
                 print(f"Error:{ex} will not stop..")
 
-        print(f"result_new_orders:{result_new_orders}")
+        print(f"result_new_orders:{result_new_orders}", flush=True)
         result_new_orders = [x['data'] for x in result_new_orders]
         orders_id.extend(result_new_orders)
         print(f"orders_id:{orders_id}")
         orders_details = get_details_orders(orders_id)
         print(f"orders_details:{orders_details}")
-        print(f"will wait some time now:{wait_seconds_time} seconds")
+        print(f"will wait some time now:{wait_seconds_time} seconds", flush=True)
         time.sleep(wait_seconds_time)
 
     currencies_balance = {}
@@ -383,7 +407,7 @@ topics = {
 topics_trades = {
     "id": "trades",
     "cmd": "sub",
-    "args": ['trade.btcusdt']
+    "args": ["candle.M1.btcusdt"]
 }
 
 
@@ -404,38 +428,38 @@ pair_to_remove = []
 amount_btc_minimum = 0.005
 
 # starting...
-print(f"Waiting {back_time_limit_seconds} seconds to store power")
-time.sleep(back_time_limit_seconds)
+# print(f"Waiting {back_time_limit_seconds} seconds to store power")
+# time.sleep(back_time_limit_seconds)
 
 last_show_status = datetime.now()
 
-wait_time_until_finish_seconds = 5
+wait_time_until_finish_seconds = 60
 
 while True:
     try:
         force_stop = False
         symbol_use = 'BTC/USDT'
         symbol_transformed = f"{symbol_use.replace('/', '').lower()}"
-        indicator = power_trades()
-        amplitude_value = amplitude()
+        # indicator = power_trades()
+        # amplitude_value = amplitude()
 
         # print(last_trades)
-        if datetime.now() > last_show_status + timedelta(seconds=5):
-            print(f"indicator:{indicator} amplitude_value:{amplitude_value} {len(last_trades)} "
-                         f"{datetime.fromtimestamp(last_trades[0]['ts']//1000)}"
-                         f" {datetime.fromtimestamp(last_trades[-1]['ts']//1000)} "
-                         f"{last_trades[0]['price']} {last_trades[-1]['price']}\n", flush=True)
-            last_show_status = datetime.now()
-        if indicator > 0.60 and amplitude_value > 1.0003:
-
-            print(f"starting a long {indicator} amplitude_value:{amplitude_value}")
+        # if datetime.now() > last_show_status + timedelta(seconds=5):
+        #     print(f"indicator:{indicator} amplitude_value:{amplitude_value} {len(last_trades)} "
+        #                  f"{datetime.fromtimestamp(last_trades[0]['ts']//1000)}"
+        #                  f" {datetime.fromtimestamp(last_trades[-1]['ts']//1000)} "
+        #                  f"{last_trades[0]['price']} {last_trades[-1]['price']}\n", flush=True)
+        #     last_show_status = datetime.now()
+        if go_long:
+            go_long = False
+            print(f"starting a long", flush=True)
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'buy', 'symbol': symbol_transformed,
                                     'amount': amount_btc_minimum,
                                     'price': order_book_result['asks'][0][0],
                                     'symbol_complete': symbol_use}]
 
-            balance_result_buy = submit_orders_arb(log_order, enter_order=True)
+            balance_result_buy = submit_orders_arb(log_order)
             print(balance_result_buy)
 
             if force_stop:
@@ -460,16 +484,16 @@ while True:
             print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}")
             # sys.exit()
 
-        elif indicator < 0.40 and amplitude_value < 0.9997:
-
-            print(f"starting a short {indicator} amplitude_value:{amplitude_value}")
+        elif go_short:
+            go_short = False
+            print(f"starting a short", flush=True)
             order_book_result = loop.run_until_complete(order_book(symbol_use))
             log_order = [{'side': 'sell', 'symbol': symbol_transformed,
                           'amount': amount_btc_minimum,
                           'price': order_book_result['bids'][0][0],
                           'symbol_complete': symbol_use}]
 
-            balance_result_sell = submit_orders_arb(log_order, enter_order=True)
+            balance_result_sell = submit_orders_arb(log_order)
             print(balance_result_sell)
 
             if force_stop:

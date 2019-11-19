@@ -195,7 +195,12 @@ async def change_price(order_detail, price, symbol_complete, enter_order=False):
         await asyncio.sleep(30.0)
         order_detail = await get_order(order_detail['data']['id'])
         print(f"finished wait will force stop after cancel", flush=True)
-        force_stop = True
+        total_amount = float(order_detail['data']['amount'])
+        amount_filled = float(order_detail['data']['filled_amount'])
+        new_amount = total_amount - amount_filled
+        if new_amount < amount_btc_minimum:
+            print(f"After wait 30 seconds amount not reach minimum {new_amount} {amount_btc_minimum}.. force finish")
+            force_stop = True
 
     response_cancel = await cancel_order(order_detail['data']['id'])
     print(f"response_cancel:{response_cancel}")

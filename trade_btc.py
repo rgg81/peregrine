@@ -134,7 +134,8 @@ class HandleWebsocketTrade(WebsocketClient):
                           f"last:{self.last_message} is_up_ma_short:{self.is_up_ma_short} "
                           f"is_down_ma_short:{self.is_down_ma_short} is_short_cross_up:{self.is_short_cross_up} "
                           f"is_short_cross_down:{self.is_short_cross_down} is_up_ma_very_long:{self.is_up_ma_very_long} "
-                          f"is_down_ma_very_long:{self.is_down_ma_very_long} ", flush=True)
+                          f"is_down_ma_very_long:{self.is_down_ma_very_long} ma_short:{ma_short} "
+                          f"ma_long:{ma_long} ma_very_long:{ma_very_long}", flush=True)
                     # self.last_go_long = check_long
                     # self.last_go_short = check_short
                     self.last_ts = msg['id']

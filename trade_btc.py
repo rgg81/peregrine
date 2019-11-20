@@ -64,6 +64,7 @@ def filter_last_trades():
 
 ma_short_freq = 7
 ma_long_freq = 30
+ma_very_long_freq = 180
 
 class HandleWebsocketTrade(WebsocketClient):
 
@@ -98,15 +99,17 @@ class HandleWebsocketTrade(WebsocketClient):
 
                     ma_short_before = moving_average(ma_short_freq)
                     ma_long_before = moving_average(ma_long_freq)
+                    ma_very_long_before = moving_average(ma_very_long_freq)
 
                     short_below_long_before = ma_short_before < ma_long_before
                     short_above_long_before = ma_short_before > ma_long_before
 
                     last_trades.append(self.last_message)
-                    last_trades = last_trades[-40:]
+                    last_trades = last_trades[-ma_very_long_freq-20:]
 
                     ma_short = moving_average(ma_short_freq)
                     ma_long = moving_average(ma_long_freq)
+                    ma_very_long = moving_average(ma_very_long_freq)
 
                     short_below_long = ma_short < ma_long
                     short_above_long = ma_short > ma_long
@@ -114,11 +117,14 @@ class HandleWebsocketTrade(WebsocketClient):
                     self.is_up_ma_short = ma_short >= ma_short_before
                     self.is_down_ma_short = ma_short <= ma_short_before
 
+                    self.is_up_ma_very_long = ma_very_long >= ma_very_long_before
+                    self.is_down_ma_very_long = ma_very_long <= ma_very_long_before
+
                     self.is_short_cross_up = short_below_long_before and short_above_long
                     self.is_short_cross_down = short_above_long_before and short_below_long
 
-                    go_long = self.is_up_ma_short and self.is_short_cross_up
-                    go_short = self.is_down_ma_short and self.is_short_cross_down
+                    go_long = self.is_up_ma_short and self.is_short_cross_up and self.is_up_ma_very_long
+                    go_short = self.is_down_ma_short and self.is_short_cross_down and self.is_down_ma_very_long
 
                     exit_long = self.is_short_cross_down
                     exit_short = self.is_short_cross_up
@@ -127,7 +133,8 @@ class HandleWebsocketTrade(WebsocketClient):
                     print(f"close:{self.close_price} open:{self.open_price} ts:{self.last_ts} "
                           f"last:{self.last_message} is_up_ma_short:{self.is_up_ma_short} "
                           f"is_down_ma_short:{self.is_down_ma_short} is_short_cross_up:{self.is_short_cross_up} "
-                          f"is_short_cross_down:{self.is_short_cross_down}", flush=True)
+                          f"is_short_cross_down:{self.is_short_cross_down} is_up_ma_very_long:{self.is_up_ma_very_long} "
+                          f"is_down_ma_very_long:{self.is_down_ma_very_long} ", flush=True)
                     # self.last_go_long = check_long
                     # self.last_go_short = check_short
                     self.last_ts = msg['id']

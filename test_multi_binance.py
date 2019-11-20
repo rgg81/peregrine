@@ -27,18 +27,18 @@ class HandleWebsocket(WebsocketClient):
 
 symbols_base = ['BTC', 'ETH', 'USDT']
 
-symbols_watch = ['VET', 'IOST', 'TRX', 'HOT', 'MFT', 'STORM', 'KEY', 'XVG', 'ZIL', 'DATA',
-                 'LEND', 'ADA', 'CMT', 'VIB', 'XLM', 'TNT', 'FUN',
-                 'IOTX', 'QKC', 'DOCK', 'NEO', 'LINK', 'QTUM', 'BAT', 'IOTA',
-                 'ONT', 'XRP', 'BQX', 'ADA', 'XRP', 'EOS', 'ENG']
+# symbols_watch = ['VET', 'IOST', 'TRX', 'HOT', 'MFT', 'STORM', 'KEY', 'XVG', 'ZIL', 'DATA',
+#                  'LEND', 'ADA', 'CMT', 'VIB', 'XLM', 'TNT', 'FUN',
+#                  'IOTX', 'QKC', 'DOCK', 'NEO', 'LINK', 'QTUM', 'BAT', 'IOTA',
+#                  'ONT', 'XRP', 'BQX', 'ADA', 'XRP', 'EOS', 'ENG']
 
 
-symbols_watch_usdt = ['ARPA', 'VET', 'ERD', 'DOGE', 'MATIC', 'FET', 'NKN', 'BAT', 'XTZ', 'TRX', 'IOST']
+# symbols_watch_usdt = ['ARPA', 'VET', 'ERD', 'DOGE', 'MATIC', 'FET', 'NKN', 'BAT', 'XTZ', 'TRX', 'IOST']
 
-# symbols_watch = ['VET', 'IOST', 'TRX', 'ADA', 'VIB']
+symbols_watch = []
 
 
-# symbols_watch_usdt = ['VET', 'ADA', 'HOT', 'TRX', 'NCASH', 'ENG']
+symbols_watch_usdt = ['VET', 'KEY']
 
 all_symbols = symbols_base + symbols_watch + symbols_watch_usdt
 

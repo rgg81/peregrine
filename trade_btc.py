@@ -123,8 +123,8 @@ class HandleWebsocketTrade(WebsocketClient):
                     self.is_short_cross_up = short_below_long_before and short_above_long
                     self.is_short_cross_down = short_above_long_before and short_below_long
 
-                    go_long = self.is_short_cross_up and self.is_up_ma_very_long
-                    go_short = self.is_short_cross_down and self.is_down_ma_very_long
+                    go_long = short_above_long and self.is_up_ma_very_long
+                    go_short = short_below_long and self.is_down_ma_very_long
 
                     exit_long = self.is_short_cross_down
                     exit_short = self.is_short_cross_up

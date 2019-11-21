@@ -484,7 +484,7 @@ topics_trades = {
     "args": ["candle.M1.btcusdt"]
 }
 
-simulation_flag = True
+simulation_flag = False
 
 
 def simulation():

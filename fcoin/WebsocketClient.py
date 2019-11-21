@@ -16,6 +16,7 @@ class WebsocketClient():
     def sub(self,topics):
         self.open()
         subParams = json.dumps(topics)
+        self.subParams = subParams
         self.ws.send(subParams)
         self.listen()
 
@@ -34,6 +35,9 @@ class WebsocketClient():
                 msg = json.loads(self.ws.recv())
             except Exception as e:
                 print(e)
+                print(f"Trying to reconnect..")
+                self.ws.connect(self.url)
+                self.ws.send(self.subParams)
                 continue
             else:
                 self.handle(msg)

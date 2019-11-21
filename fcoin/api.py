@@ -107,6 +107,10 @@ class Market():
     self.api_url = self.api_base_url + "/candles/{resolution}/{symbol}".format(resolution=resolution,symbol=symbol)
     return self.session.get(self.api_url,params = {"limit": 200}).json()
 
+  def get_candle_info_before(self,resolution,symbol,before):
+    self.api_url = self.api_base_url + "/candles/{resolution}/{symbol}".format(resolution=resolution,symbol=symbol)
+    return self.session.get(self.api_url,params = {"limit": 200, "before": before}).json()
+
 
 
 def order_create_param(*args):

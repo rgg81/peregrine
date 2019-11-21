@@ -336,6 +336,41 @@ async def check_log_entry(log_entry, orders_detail, enter_order=False):
 wait_seconds_time = 2
 
 
+def submit_orders_simulation(log_orders):
+    global loop, wait_seconds_time, force_stop
+
+    currencies_balance = {}
+    for a_log_order in log_orders:
+        print(f"a_log_order:{a_log_order}")
+        base_currency, quote_currency = a_log_order['symbol_complete'].split('/')
+
+        if a_log_order['side'] == 'buy':
+
+            start = quote_currency
+            end = base_currency
+            total = a_log_order['amount'] * a_log_order['price']
+            print(f"currencies_balance[start] = {currencies_balance.get(start, 0.0)} - {total}")
+            currencies_balance[start] = currencies_balance.get(start, 0.0) - total
+            print(f"currencies_balance[start]:{currencies_balance[start]}")
+
+            end_amount = a_log_order['amount']
+            currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
+            print(f"currencies_balance[end]:{currencies_balance[end]}")
+
+        else:
+            end = quote_currency
+            start = base_currency
+            filled_amount = a_log_order['amount']
+            currencies_balance[start] = currencies_balance.get(start, 0.0) - filled_amount
+            print(f"currencies_balance[start]:{currencies_balance[start]}")
+
+            end_amount = a_log_order['amount'] * a_log_order['price']
+            currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
+            print(f"currencies_balance[end]:{currencies_balance[end]}")
+    print(f"Final balances:{currencies_balance}", flush=True)
+    return currencies_balance
+
+
 def submit_orders_arb(log_orders, enter_order=False):
     global loop, wait_seconds_time, force_stop
     orders_id = release_all_new_orders(log_orders)
@@ -449,12 +484,48 @@ topics_trades = {
     "args": ["candle.M1.btcusdt"]
 }
 
+simulation_flag = True
 
-sub = ws.sub
-sub2 = ws2.sub
 
-Thread(target=sub,args=(topics,)).start()
-Thread(target=sub2,args=(topics_trades,)).start()
+def simulation():
+    print(f"Starting simulaton waiting 10s")
+    time.sleep(10)
+    last_trades.reverse()
+    for msg in last_trades[200:]:
+        # print(f"{msg}")
+        best_bid['btcusdt'] = {'price': msg['open'], 'qtd': 0}
+        best_ask['btcusdt'] = {'price': msg['open'], 'qtd': 0}
+        msg['type'] = 'candle.M1.btcusdt'
+        ws2.handle(msg)
+        time.sleep(1)
+
+
+if not simulation_flag:
+    sub = ws.sub
+    sub2 = ws2.sub
+
+    Thread(target=sub,args=(topics,)).start()
+    Thread(target=sub2,args=(topics_trades,)).start()
+
+else:
+    last_trades = []
+
+    start_date = datetime(2019, 10, 1)
+
+    result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
+    last_trades.extend(result)
+    last_time_seconds = result[-1]['id']
+
+    while last_time_seconds > start_date.timestamp() and len(result) > 1:
+        result = fcoin.Api().market.get_candle_info_before('M1', 'btcusdt', last_time_seconds)['data']
+        if len(result) > 1:
+            last_time_seconds = result[-1]['id']
+            result = result[1:]
+            last_trades.extend(result)
+            print(f"result:{result[0]['id']}")
+
+    Thread(target=simulation,args=()).start()
+
 
 
 # fee = 1 - exchange.fees['trading']['taker']
@@ -497,8 +568,10 @@ while True:
                                     'amount': amount_btc_minimum,
                                     'price': order_book_result['asks'][0][0],
                                     'symbol_complete': symbol_use}]
-
-            balance_result_buy = submit_orders_arb(log_order)
+            if not simulation_flag:
+                balance_result_buy = submit_orders_arb(log_order)
+            else:
+                balance_result_buy = submit_orders_simulation(log_order)
             print(balance_result_buy)
 
             if force_stop:
@@ -514,7 +587,10 @@ while True:
                           'price': order_book_result['bids'][0][0],
                           'symbol_complete': symbol_use}]
 
-            balance_result_sell = submit_orders_arb(log_order)
+            if not simulation_flag:
+                balance_result_sell = submit_orders_arb(log_order)
+            else:
+                balance_result_sell = submit_orders_simulation(log_order)
             print(balance_result_sell)
 
             profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
@@ -533,7 +609,10 @@ while True:
                           'price': order_book_result['bids'][0][0],
                           'symbol_complete': symbol_use}]
 
-            balance_result_sell = submit_orders_arb(log_order)
+            if not simulation_flag:
+                balance_result_sell = submit_orders_arb(log_order)
+            else:
+                balance_result_sell = submit_orders_simulation(log_order)
             print(balance_result_sell)
 
             if force_stop:
@@ -549,7 +628,10 @@ while True:
                           'price': order_book_result['asks'][0][0],
                           'symbol_complete': symbol_use}]
 
-            balance_result_buy = submit_orders_arb(log_order)
+            if not simulation_flag:
+                balance_result_buy = submit_orders_arb(log_order)
+            else:
+                balance_result_buy = submit_orders_simulation(log_order)
             print(balance_result_buy)
 
             profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']

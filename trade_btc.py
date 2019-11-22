@@ -9,6 +9,7 @@ from peregrinearb import create_weighted_multi_exchange_digraph, print_profit_op
 # from ccxt import async_support as ccxt
 import traceback
 import sys
+import random
 
 
 go_long = False
@@ -62,9 +63,9 @@ def filter_last_trades():
     last_trades = [x for x in last_trades if x['ts'] > millis_past_minute]
 
 
-ma_short_freq = 7
-ma_long_freq = 30
-ma_very_long_freq = 180
+ma_short_freq = 5 # 5, 21, 173
+ma_long_freq = 21
+ma_very_long_freq = 173
 
 class HandleWebsocketTrade(WebsocketClient):
 
@@ -123,8 +124,8 @@ class HandleWebsocketTrade(WebsocketClient):
                     self.is_short_cross_up = short_below_long_before and short_above_long
                     self.is_short_cross_down = short_above_long_before and short_below_long
 
-                    go_long = short_above_long and self.is_up_ma_very_long
-                    go_short = short_below_long and self.is_down_ma_very_long
+                    go_long = self.is_short_cross_up and short_above_long and self.is_up_ma_very_long
+                    go_short = self.is_short_cross_down and short_below_long and self.is_down_ma_very_long
 
                     exit_long = self.is_short_cross_down
                     exit_short = self.is_short_cross_up
@@ -484,25 +485,62 @@ topics_trades = {
     "args": ["candle.M1.btcusdt"]
 }
 
-simulation_flag = True
+simulation_flag = False
 finish_trade = False
 
 
 def simulation():
-    global finish_trade
-    print(f"Starting simulaton waiting 10s")
-    time.sleep(10)
-    last_trades.reverse()
-    for msg in last_trades[200:]:
-        # print(f"{msg}")
-        finish_trade = False
-        while not finish_trade:
-            pass
+    total_iterations = 50
+    global total_trades, finish_trade, last_trades, ma_short_freq, ma_long_freq, ma_very_long_freq, profit_acc, ws2, go_short, go_long, exit_long, exit_short
 
-        best_bid['btcusdt'] = {'price': msg['open'], 'qtd': 0}
-        best_ask['btcusdt'] = {'price': msg['open'], 'qtd': 0}
-        msg['type'] = 'candle.M1.btcusdt'
-        ws2.handle(msg)
+    max_profit = 0.0
+    max_total_trades = None
+    max_config = None
+    for iteration_index in range(total_iterations):
+        ws2 = HandleWebsocketTrade()
+
+        last_trades = []
+        start_date = datetime(2019, 10, 1)
+        result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
+        last_trades.extend(result)
+        last_time_seconds = result[-1]['id']
+
+        while last_time_seconds > start_date.timestamp() and len(result) > 1:
+            result = fcoin.Api().market.get_candle_info_before('M1', 'btcusdt', last_time_seconds)['data']
+            if len(result) > 1:
+                last_time_seconds = result[-1]['id']
+                result = result[1:]
+                last_trades.extend(result)
+                print(f"result:{result[0]['id']}")
+
+        last_trades.reverse()
+
+        go_short, go_long,  exit_long, exit_short = False, False, False, False
+        ma_short_freq = random.randint(4, 12)
+        ma_long_freq = random.randint(20, 40)
+        ma_very_long_freq = random.randint(150, 300)
+
+        profit_acc = 0.0
+        total_trades = 0
+        print(f"Starting simulaton waiting 5s:last_trades{last_trades[0]} {last_trades[-1]}")
+        time.sleep(5)
+        for msg in last_trades[ma_very_long_freq:]:
+            # print(f"{msg}")
+            finish_trade = False
+            while not finish_trade:
+                pass
+
+            best_bid['btcusdt'] = {'price': msg['open'], 'qtd': 0}
+            best_ask['btcusdt'] = {'price': msg['open'], 'qtd': 0}
+            msg['type'] = 'candle.M1.btcusdt'
+            ws2.handle(msg)
+        if profit_acc > max_profit:
+            max_profit = profit_acc
+            max_total_trades = total_trades
+            max_config = ma_short_freq, ma_long_freq, ma_very_long_freq
+        print(f"End simulation: finished profit:{profit_acc} total trades:{total_trades} ma_short_freq:{ma_short_freq} "
+              f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq} iteration:{iteration_index} "
+              f"max_profit:{max_profit} max_total_trades:{max_total_trades} max_config:{max_config}\n\n\n")
 
 
 if not simulation_flag:
@@ -513,21 +551,6 @@ if not simulation_flag:
     Thread(target=sub2,args=(topics_trades,)).start()
 
 else:
-    last_trades = []
-
-    start_date = datetime(2019, 10, 1)
-
-    result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
-    last_trades.extend(result)
-    last_time_seconds = result[-1]['id']
-
-    while last_time_seconds > start_date.timestamp() and len(result) > 1:
-        result = fcoin.Api().market.get_candle_info_before('M1', 'btcusdt', last_time_seconds)['data']
-        if len(result) > 1:
-            last_time_seconds = result[-1]['id']
-            result = result[1:]
-            last_trades.extend(result)
-            print(f"result:{result[0]['id']}")
 
     Thread(target=simulation,args=()).start()
 
@@ -537,6 +560,7 @@ else:
 # fee = 1 - 0.0006
 
 profit_acc = 0.0
+total_trades = 0
 pair_to_remove = []
 amount_btc_minimum = 0.005
 
@@ -554,18 +578,7 @@ while True:
         force_stop = False
         symbol_use = 'BTC/USDT'
         symbol_transformed = f"{symbol_use.replace('/', '').lower()}"
-        # indicator = power_trades()
-        # amplitude_value = amplitude()
 
-        # print(last_trades)
-        if datetime.now() > last_show_status + timedelta(seconds=20):
-            print(f"last_trades:{[x['id'] for x in last_trades[-3:]]}")
-            print(f"MA 7:{moving_average(ma_short_freq)} MA 30:{moving_average(ma_long_freq)}")
-        #     print(f"indicator:{indicator} amplitude_value:{amplitude_value} {len(last_trades)} "
-        #                  f"{datetime.fromtimestamp(last_trades[0]['ts']//1000)}"
-        #                  f" {datetime.fromtimestamp(last_trades[-1]['ts']//1000)} "
-        #                  f"{last_trades[0]['price']} {last_trades[-1]['price']}\n", flush=True)
-            last_show_status = datetime.now()
         if go_long:
             go_long = False
             print(f"starting a long", flush=True)
@@ -604,7 +617,9 @@ while True:
 
             profit_acc += profit_iteration
 
-            print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}\n\n", flush=True)
+            total_trades += 1
+
+            print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n", flush=True)
             # sys.exit()
 
         elif go_short:
@@ -645,7 +660,9 @@ while True:
             profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
             profit_acc += profit_iteration
 
-            print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}\n\n", flush=True)
+            total_trades += 1
+
+            print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n", flush=True)
         #     # sys.exit()
         finish_trade = True
 

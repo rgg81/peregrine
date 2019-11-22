@@ -135,7 +135,7 @@ class HandleWebsocketTrade(WebsocketClient):
                           f"is_down_ma_short:{self.is_down_ma_short} is_short_cross_up:{self.is_short_cross_up} "
                           f"is_short_cross_down:{self.is_short_cross_down} is_up_ma_very_long:{self.is_up_ma_very_long} "
                           f"is_down_ma_very_long:{self.is_down_ma_very_long} ma_short:{ma_short} "
-                          f"ma_long:{ma_long} ma_very_long:{ma_very_long}", flush=True)
+                          f"ma_long:{ma_long} ma_very_long:{ma_very_long} \n\n", flush=True)
                     # self.last_go_long = check_long
                     # self.last_go_short = check_short
                     self.last_ts = msg['id']
@@ -349,24 +349,24 @@ def submit_orders_simulation(log_orders):
             start = quote_currency
             end = base_currency
             total = a_log_order['amount'] * a_log_order['price']
-            print(f"currencies_balance[start] = {currencies_balance.get(start, 0.0)} - {total}")
+            print(f"currencies_balance[start] = {currencies_balance.get(start, 0.0)} - {total}", flush=True)
             currencies_balance[start] = currencies_balance.get(start, 0.0) - total
-            print(f"currencies_balance[start]:{currencies_balance[start]}")
+            print(f"currencies_balance[start]:{currencies_balance[start]}", flush=True)
 
             end_amount = a_log_order['amount']
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
-            print(f"currencies_balance[end]:{currencies_balance[end]}")
+            print(f"currencies_balance[end]:{currencies_balance[end]}", flush=True)
 
         else:
             end = quote_currency
             start = base_currency
             filled_amount = a_log_order['amount']
             currencies_balance[start] = currencies_balance.get(start, 0.0) - filled_amount
-            print(f"currencies_balance[start]:{currencies_balance[start]}")
+            print(f"currencies_balance[start]:{currencies_balance[start]}", flush=True)
 
             end_amount = a_log_order['amount'] * a_log_order['price']
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
-            print(f"currencies_balance[end]:{currencies_balance[end]}")
+            print(f"currencies_balance[end]:{currencies_balance[end]}", flush=True)
     print(f"Final balances:{currencies_balance}", flush=True)
     return currencies_balance
 
@@ -422,7 +422,7 @@ def submit_orders_arb(log_orders, enter_order=False):
 
             end_amount = sum([float(x['data']['filled_amount']) for x in orders]) - sum([float(x['data']['fill_fees']) for x in orders])
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
-            print(f"currencies_balance[end]:{currencies_balance[end]}")
+            print(f"currencies_balance[end]:{currencies_balance[end]}", flush=True)
 
         else:
             end = quote_currency
@@ -433,7 +433,7 @@ def submit_orders_arb(log_orders, enter_order=False):
 
             end_amount = sum([float(x['data']['filled_amount']) * float(x['data']['price']) for x in orders]) - sum([float(x['data']['fill_fees']) * float(x['data']['price']) for x in orders])
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
-            print(f"currencies_balance[end]:{currencies_balance[end]}")
+            print(f"currencies_balance[end]:{currencies_balance[end]}", flush=True)
     print(f"Final balances:{currencies_balance}", flush=True)
     return currencies_balance
     #sys.exit()
@@ -484,20 +484,25 @@ topics_trades = {
     "args": ["candle.M1.btcusdt"]
 }
 
-simulation_flag = False
+simulation_flag = True
+finish_trade = False
 
 
 def simulation():
+    global finish_trade
     print(f"Starting simulaton waiting 10s")
     time.sleep(10)
     last_trades.reverse()
     for msg in last_trades[200:]:
         # print(f"{msg}")
+        finish_trade = False
+        while not finish_trade:
+            pass
+
         best_bid['btcusdt'] = {'price': msg['open'], 'qtd': 0}
         best_ask['btcusdt'] = {'price': msg['open'], 'qtd': 0}
         msg['type'] = 'candle.M1.btcusdt'
         ws2.handle(msg)
-        time.sleep(1)
 
 
 if not simulation_flag:
@@ -545,6 +550,7 @@ wait_time_until_finish_seconds = 50
 
 while True:
     try:
+
         force_stop = False
         symbol_use = 'BTC/USDT'
         symbol_transformed = f"{symbol_use.replace('/', '').lower()}"
@@ -579,6 +585,7 @@ while True:
                 continue
 
             while not exit_long:
+                finish_trade = True
                 pass
 
             order_book_result = loop.run_until_complete(order_book(symbol_use))
@@ -597,7 +604,7 @@ while True:
 
             profit_acc += profit_iteration
 
-            print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}")
+            print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}\n\n", flush=True)
             # sys.exit()
 
         elif go_short:
@@ -620,6 +627,7 @@ while True:
                 continue
 
             while not exit_short:
+                finish_trade = True
                 pass
 
             order_book_result = loop.run_until_complete(order_book(symbol_use))
@@ -637,8 +645,9 @@ while True:
             profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
             profit_acc += profit_iteration
 
-            print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}")
+            print(f"Final result is:{profit_iteration} profit_acc:{profit_acc}\n\n", flush=True)
         #     # sys.exit()
+        finish_trade = True
 
     except Exception as ex:
         print(ex, flush=True)

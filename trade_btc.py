@@ -193,10 +193,13 @@ class HandleWebsocketTrade(WebsocketClient):
 def moving_average(steps_back):
     global last_trades, cache_moving_average, simulation_flag
 
-    candles = last_trades[-steps_back:]
-    candles_close_price = [x['close'] for x in candles]
-    ma = sum(candles_close_price) / len(candles_close_price)
-    return ma
+    if simulation_flag:
+        return cache_moving_average[f"{steps_back}"][f"{last_trades[-1]['id']}"]
+    else:
+        candles = last_trades[-steps_back:]
+        candles_close_price = [x['close'] for x in candles]
+        ma = sum(candles_close_price) / len(candles_close_price)
+        return ma
 
 
 def power_trades():
@@ -557,21 +560,34 @@ def simulation():
         max_total_trades = None
         max_config = None
 
-        selected_trades_opt = historical_trades[start_row:start_row + total_samples_opt]
-        # selected_trades_opt = historical_trades
+        # selected_trades_opt = historical_trades[start_row:start_row + total_samples_opt]
+        selected_trades_opt = historical_trades
 
         for iteration_index in range(total_iterations):
             ws2 = HandleWebsocketTrade()
 
+            while open_trade:
+                exit_long, exit_short = True, True
             go_short, go_long,  exit_long, exit_short = False, False, False, False
-            ma_short_freq = random.randint(2, 4)
-            # ma_short_freq = 2 #3
-            ma_long_freq = random.randrange(8, 32, 2)
-            # ma_long_freq = 6
-            ma_very_long_freq = random.randrange(200, 300, 10)
-            # ma_very_long_freq = 180
-            stop_loss_percent = random.choice([0.1, 0.3, 0.2])
-            # stop_loss_percent = 0.1
+            # ma_short_freq = random.randint(2, 3)
+            ma_short_freq = 2 #3
+            # ma_long_freq = random.randrange(8, 32, 2)
+            ma_long_freq = 8
+            # ma_very_long_freq = random.randrange(180, 300, 20)
+            ma_very_long_freq = 240
+            # stop_loss_percent = random.choice([0.1, 0.3, 0.2, 0.4, 0.5])
+            stop_loss_percent = 1.0
+
+            df = pd.DataFrame(selected_trades_opt)
+
+            ma_short_mean = df['close'].rolling(window=ma_short_freq).mean().values
+            ma_long_mean = df['close'].rolling(window=ma_long_freq).mean().values
+            ma_very_long_mean = df['close'].rolling(window=ma_very_long_freq).mean().values
+
+            for index in range(len(selected_trades_opt)):
+                cache_moving_average[f"{ma_short_freq}"][f"{selected_trades_opt[index]['id']}"] = ma_short_mean[index]
+                cache_moving_average[f"{ma_long_freq}"][f"{selected_trades_opt[index]['id']}"] = ma_long_mean[index]
+                cache_moving_average[f"{ma_very_long_freq}"][f"{selected_trades_opt[index]['id']}"] = ma_very_long_mean[index]
 
             profit_acc = 0.0
             last_trades = selected_trades_opt[:ma_very_long_freq]
@@ -598,6 +614,9 @@ def simulation():
                   f"max_profit:{max_profit} max_total_trades:{max_total_trades} max_config:{max_config}\n\n\n", flush=True, file=f)
 
         ws2 = HandleWebsocketTrade()
+
+        while open_trade:
+            exit_long, exit_short = True, True
 
         go_short, go_long,  exit_long, exit_short = False, False, False, False
 
@@ -660,7 +679,7 @@ if not simulation_flag:
 else:
 
     historical_trades = []
-    start_date = datetime(2019, 11, 1)
+    start_date = datetime(2019, 9, 1)
     result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
     historical_trades.extend(result)
     last_time_seconds = result[-1]['id']

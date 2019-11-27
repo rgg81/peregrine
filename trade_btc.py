@@ -11,7 +11,8 @@ import traceback
 import sys
 import random
 import ccxt
-
+import pandas as pd
+from collections import defaultdict
 
 go_long = False
 go_short = False
@@ -90,7 +91,7 @@ class HandleWebsocketTrade(WebsocketClient):
 
 
     def handle(self,msg):
-        global go_short, go_long, last_trades, exit_long, exit_short
+        global go_short, go_long, last_trades, exit_long, exit_short, simulation_flag
 
         # print('receive message')
         for key, value in msg.items():
@@ -130,8 +131,25 @@ class HandleWebsocketTrade(WebsocketClient):
                     self.is_short_cross_up = short_below_long_before and short_above_long
                     self.is_short_cross_down = short_above_long_before and short_below_long
 
-                    stop_loss_up_bool = self.stop_loss_price_up is not None and self.last_message['close'] <= self.stop_loss_price_up
-                    stop_loss_down_bool = self.stop_loss_price_down is not None and self.last_message['close'] >= self.stop_loss_price_down
+                    if simulation_flag:
+                        stop_loss_up_bool = self.stop_loss_price_up is not None and self.last_message[
+                            'low'] <= self.stop_loss_price_up
+
+                        if stop_loss_up_bool:
+                            best_bid['btcusdt'] = {'price': round(self.stop_loss_price_up, 1), 'qtd': 0}
+                            best_ask['btcusdt'] = {'price': round(self.stop_loss_price_up, 1), 'qtd': 0}
+
+                        stop_loss_down_bool = self.stop_loss_price_down is not None and self.last_message[
+                            'high'] >= self.stop_loss_price_down
+                        if stop_loss_down_bool:
+                            best_bid['btcusdt'] = {'price': round(self.stop_loss_price_down, 1), 'qtd': 0}
+                            best_ask['btcusdt'] = {'price': round(self.stop_loss_price_down, 1), 'qtd': 0}
+                    else:
+                        order_book_result = order_book(symbol_use)
+                        stop_loss_up_bool = self.stop_loss_price_up is not None and order_book_result['bids'][0][
+                            0] <= self.stop_loss_price_up
+                        stop_loss_down_bool = self.stop_loss_price_down is not None and order_book_result['asks'][0][
+                            0] >= self.stop_loss_price_down
 
                     # stop_loss_up_bool = False
                     # stop_loss_down_bool = False
@@ -161,25 +179,25 @@ class HandleWebsocketTrade(WebsocketClient):
                     if go_short:
                         self.stop_loss_price_down = self.last_message['close'] * (1 + stop_loss_percent/100)
 
-
-
-                    print(f"ts:{self.last_ts} "
+                    if not simulation_flag:
+                        print(f"ts:{self.last_ts} "
                           f"last:{self.last_message} is_up_ma_short:{self.is_up_ma_short} "
                           f"is_down_ma_short:{self.is_down_ma_short} is_short_cross_up:{self.is_short_cross_up} "
                           f"is_short_cross_down:{self.is_short_cross_down} is_up_ma_very_long:{self.is_up_ma_very_long} "
                           f"is_down_ma_very_long:{self.is_down_ma_very_long} ma_short:{ma_short} "
                           f"ma_long:{ma_long} ma_very_long:{ma_very_long} \n\n", flush=True)
-                    # self.last_go_long = check_long
-                    # self.last_go_short = check_short
                     self.last_ts = msg['id']
                 self.last_message = msg
 
 
 def moving_average(steps_back):
-    global last_trades
+    global last_trades, cache_moving_average, simulation_flag
+
     candles = last_trades[-steps_back:]
     candles_close_price = [x['close'] for x in candles]
-    return sum(candles_close_price)/len(candles_close_price)
+    ma = sum(candles_close_price) / len(candles_close_price)
+    return ma
+
 
 def power_trades():
     global last_trades
@@ -481,7 +499,7 @@ async def pairs_decimal_fcoin():
     return result_dict
 
 
-async def order_book(a_pair):
+def order_book(a_pair):
     # print('start:{}'.format(a_pair))
     # index = exchange_names.index(exchange_name)
     key = f"{a_pair.replace('/','').lower()}"
@@ -520,13 +538,15 @@ topics_trades = {
 simulation_flag = True
 finish_trade = False
 
+cache_moving_average = defaultdict(dict)
+
 
 def simulation():
-    total_iterations = 20
-    global stop_loss_percent, historical_trades, total_trades, finish_trade, last_trades, ma_short_freq, ma_long_freq, ma_very_long_freq, profit_acc, ws2, go_short, go_long, exit_long, exit_short
+    total_iterations = 10
+    global open_trade, cache_moving_average, stop_loss_percent, historical_trades, total_trades, finish_trade, last_trades, ma_short_freq, ma_long_freq, ma_very_long_freq, profit_acc, ws2, go_short, go_long, exit_long, exit_short
 
-    total_samples_opt = 28800
-    total_samples_test = 8000
+    total_samples_opt = 1440
+    total_samples_test = 240
     start_row = 0
 
     profit_test = 0.0
@@ -537,21 +557,21 @@ def simulation():
         max_total_trades = None
         max_config = None
 
-        # selected_trades_opt = historical_trades[start_row:start_row + total_samples_opt]
-        selected_trades_opt = historical_trades
+        selected_trades_opt = historical_trades[start_row:start_row + total_samples_opt]
+        # selected_trades_opt = historical_trades
 
         for iteration_index in range(total_iterations):
             ws2 = HandleWebsocketTrade()
 
             go_short, go_long,  exit_long, exit_short = False, False, False, False
-            # ma_short_freq = random.randint(3, 8)
-            ma_short_freq = 2 #3
-            # ma_long_freq = random.randint(20, 30)
-            ma_long_freq = 8
-            # ma_very_long_freq = random.randint(200, 250)
-            ma_very_long_freq = 240
-            # stop_loss_percent = random.choice([0.1, 0.3, 0.2])
-            stop_loss_percent = 0.2
+            ma_short_freq = random.randint(2, 4)
+            # ma_short_freq = 2 #3
+            ma_long_freq = random.randrange(8, 32, 2)
+            # ma_long_freq = 6
+            ma_very_long_freq = random.randrange(200, 300, 10)
+            # ma_very_long_freq = 180
+            stop_loss_percent = random.choice([0.1, 0.3, 0.2])
+            # stop_loss_percent = 0.1
 
             profit_acc = 0.0
             last_trades = selected_trades_opt[:ma_very_long_freq]
@@ -574,7 +594,7 @@ def simulation():
                 max_config = ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent
             with open("log.txt", "a") as f:
                 print(f"End simulation: finished profit:{profit_acc} total trades:{total_trades} ma_short_freq:{ma_short_freq} "
-                  f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq} iteration:{iteration_index} "
+                  f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq} stop_loss_percent:{stop_loss_percent} iteration:{iteration_index} "
                   f"max_profit:{max_profit} max_total_trades:{max_total_trades} max_config:{max_config}\n\n\n", flush=True, file=f)
 
         ws2 = HandleWebsocketTrade()
@@ -585,7 +605,7 @@ def simulation():
 
         ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent = max_config
 
-        selected_trades_test = historical_trades[total_samples_opt + start_row - ma_very_long_freq:total_samples_opt + start_row + total_samples_test]
+        selected_trades_test = historical_trades[total_samples_opt + start_row - ma_very_long_freq:]
         last_trades = selected_trades_test[:ma_very_long_freq]
 
         with open("log_test.txt", "a") as f:
@@ -600,16 +620,24 @@ def simulation():
         total_trades = 0
         print(f"Starting simulaton waiting 5s:last_trades{last_trades[0]} {last_trades[-1]}")
         time.sleep(5)
-        for msg in selected_trades_test[ma_very_long_freq:]:
-            # print(f"{msg}")
-            finish_trade = False
-            while not finish_trade:
-                pass
 
-            best_bid['btcusdt'] = {'price': msg['open'], 'qtd': 0}
-            best_ask['btcusdt'] = {'price': msg['open'], 'qtd': 0}
-            msg['type'] = 'candle.M1.btcusdt'
-            ws2.handle(msg)
+        index_sample_test = 0
+
+        if max_profit > 0.0:
+
+            while index_sample_test < total_samples_test or not open_trade:
+                finish_trade = False
+                while not finish_trade:
+                    pass
+                msg = selected_trades_test[index_sample_test]
+                best_bid['btcusdt'] = {'price': msg['open'], 'qtd': 0}
+                best_ask['btcusdt'] = {'price': msg['open'], 'qtd': 0}
+                msg['type'] = 'candle.M1.btcusdt'
+                ws2.handle(msg)
+
+                index_sample_test += 1
+        else:
+            print(f"Not able to find any profitable situation.. so trader will not work:max profit:{max_profit}")
 
         profit_test += profit_acc
 
@@ -619,6 +647,7 @@ def simulation():
                   f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq}\n\n\n", flush=True, file=f)
 
         start_row += total_samples_test
+        sys.exit()
 
 
 if not simulation_flag:
@@ -631,7 +660,7 @@ if not simulation_flag:
 else:
 
     historical_trades = []
-    start_date = datetime(2019, 9, 1)
+    start_date = datetime(2019, 11, 1)
     result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
     historical_trades.extend(result)
     last_time_seconds = result[-1]['id']
@@ -679,18 +708,20 @@ amount_btc_minimum = 0.005
 last_show_status = datetime.now()
 
 wait_time_until_finish_seconds = 50
+open_trade = False
+symbol_use = 'BTC/USDT'
 
 while True:
     try:
 
         force_stop = False
-        symbol_use = 'BTC/USDT'
+
         symbol_transformed = f"{symbol_use.replace('/', '').lower()}"
 
         if go_long:
             go_long = False
             print(f"starting a long", flush=True)
-            order_book_result = loop.run_until_complete(order_book(symbol_use))
+            order_book_result = order_book(symbol_use)
             log_order = [{'side': 'buy', 'symbol': symbol_transformed,
                                     'amount': amount_btc_minimum,
                                     'price': order_book_result['asks'][0][0],
@@ -705,11 +736,13 @@ while True:
                 print(f"Restarting loop since force stop is true")
                 continue
 
+            open_trade = True
+
             while not exit_long:
                 finish_trade = True
                 pass
 
-            order_book_result = loop.run_until_complete(order_book(symbol_use))
+            order_book_result = order_book(symbol_use)
             log_order = [{'side': 'sell', 'symbol': symbol_transformed,
                           'amount': amount_btc_minimum,
                           'price': order_book_result['bids'][0][0],
@@ -727,13 +760,15 @@ while True:
 
             total_trades += 1
 
+            open_trade = False
+
             print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n", flush=True)
             # sys.exit()
 
         elif go_short:
             go_short = False
             print(f"starting a short", flush=True)
-            order_book_result = loop.run_until_complete(order_book(symbol_use))
+            order_book_result = order_book(symbol_use)
             log_order = [{'side': 'sell', 'symbol': symbol_transformed,
                           'amount': amount_btc_minimum,
                           'price': order_book_result['bids'][0][0],
@@ -749,11 +784,13 @@ while True:
                 print(f"Restarting loop since force stop is true")
                 continue
 
+            open_trade = True
+
             while not exit_short:
                 finish_trade = True
                 pass
 
-            order_book_result = loop.run_until_complete(order_book(symbol_use))
+            order_book_result = order_book(symbol_use)
             log_order = [{'side': 'buy', 'symbol': symbol_transformed,
                           'amount': amount_btc_minimum,
                           'price': order_book_result['asks'][0][0],
@@ -769,6 +806,8 @@ while True:
             profit_acc += profit_iteration
 
             total_trades += 1
+
+            open_trade = False
 
             print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n", flush=True)
         #     # sys.exit()

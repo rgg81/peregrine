@@ -125,8 +125,8 @@ class HandleWebsocketTrade(WebsocketClient):
                     self.is_up_ma_short = ma_short >= ma_short_before
                     self.is_down_ma_short = ma_short <= ma_short_before
 
-                    self.is_up_ma_very_long = ma_very_long >= ma_very_long_before
-                    self.is_down_ma_very_long = ma_very_long <= ma_very_long_before
+                    self.is_up_ma_very_long = ma_very_long < ma_long and ma_very_long < ma_short and ma_very_long >= ma_very_long_freq
+                    self.is_down_ma_very_long = ma_very_long > ma_long and ma_very_long > ma_short and ma_very_long <= ma_very_long_before
 
                     self.is_short_cross_up = short_below_long_before and short_above_long
                     self.is_short_cross_down = short_above_long_before and short_below_long
@@ -540,7 +540,7 @@ topics_trades = {
 
 simulation_flag = True
 finish_trade = False
-
+open_trade = False
 cache_moving_average = defaultdict(dict)
 
 
@@ -548,13 +548,13 @@ def simulation():
     total_iterations = 10
     global open_trade, cache_moving_average, stop_loss_percent, historical_trades, total_trades, finish_trade, last_trades, ma_short_freq, ma_long_freq, ma_very_long_freq, profit_acc, ws2, go_short, go_long, exit_long, exit_short
 
-    total_samples_opt = 1440
-    total_samples_test = 240
+    total_samples_opt = 100
+    total_samples_test = 50
     start_row = 0
 
     profit_test = 0.0
 
-    while total_samples_opt + start_row < len(historical_trades):
+    while True: # total_samples_opt + start_row < len(historical_trades):
 
         max_profit = -1000.0
         max_total_trades = None
@@ -571,12 +571,12 @@ def simulation():
             go_short, go_long,  exit_long, exit_short = False, False, False, False
             # ma_short_freq = random.randint(2, 3)
             ma_short_freq = 2 #3
-            # ma_long_freq = random.randrange(8, 32, 2)
-            ma_long_freq = 8
-            # ma_very_long_freq = random.randrange(180, 300, 20)
-            ma_very_long_freq = 240
-            # stop_loss_percent = random.choice([0.1, 0.3, 0.2, 0.4, 0.5])
-            stop_loss_percent = 1.0
+            # ma_long_freq = random.randrange(8, 60, 4)
+            ma_long_freq = 22
+            # ma_very_long_freq = random.randrange(180, 360, 20)
+            ma_very_long_freq = 360
+            # stop_loss_percent = random.choice([0.3, 0.5, 1.0])
+            stop_loss_percent = 0.5
 
             df = pd.DataFrame(selected_trades_opt)
 
@@ -679,7 +679,7 @@ if not simulation_flag:
 else:
 
     historical_trades = []
-    start_date = datetime(2019, 9, 1)
+    start_date = datetime(2019, 7, 1)
     result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
     historical_trades.extend(result)
     last_time_seconds = result[-1]['id']
@@ -708,6 +708,7 @@ else:
             print(f"result:{result[0]['id']}")
 
     historical_trades.reverse()
+    # simulation()
     Thread(target=simulation,args=()).start()
 
 
@@ -727,110 +728,114 @@ amount_btc_minimum = 0.005
 last_show_status = datetime.now()
 
 wait_time_until_finish_seconds = 50
-open_trade = False
 symbol_use = 'BTC/USDT'
+
+
+def trade():
+    global force_stop, go_short, go_long, open_trade, finish_trade, profit_acc, total_trades
+    force_stop = False
+
+    symbol_transformed = f"{symbol_use.replace('/', '').lower()}"
+
+    if go_long:
+        go_long = False
+        print(f"starting a long", flush=True)
+        order_book_result = order_book(symbol_use)
+        log_order = [{'side': 'buy', 'symbol': symbol_transformed,
+                      'amount': amount_btc_minimum,
+                      'price': order_book_result['asks'][0][0],
+                      'symbol_complete': symbol_use}]
+        if not simulation_flag:
+            balance_result_buy = submit_orders_arb(log_order)
+        else:
+            balance_result_buy = submit_orders_simulation(log_order)
+        print(balance_result_buy)
+
+        if force_stop:
+            print(f"Restarting loop since force stop is true")
+            return
+
+        open_trade = True
+
+        while not exit_long:
+            finish_trade = True
+            pass
+
+        order_book_result = order_book(symbol_use)
+        log_order = [{'side': 'sell', 'symbol': symbol_transformed,
+                      'amount': amount_btc_minimum,
+                      'price': order_book_result['bids'][0][0],
+                      'symbol_complete': symbol_use}]
+
+        if not simulation_flag:
+            balance_result_sell = submit_orders_arb(log_order)
+        else:
+            balance_result_sell = submit_orders_simulation(log_order)
+        print(balance_result_sell)
+
+        profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
+
+        profit_acc += profit_iteration
+
+        total_trades += 1
+
+        open_trade = False
+
+        print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n", flush=True)
+        # sys.exit()
+
+    elif go_short:
+        go_short = False
+        print(f"starting a short", flush=True)
+        order_book_result = order_book(symbol_use)
+        log_order = [{'side': 'sell', 'symbol': symbol_transformed,
+                      'amount': amount_btc_minimum,
+                      'price': order_book_result['bids'][0][0],
+                      'symbol_complete': symbol_use}]
+
+        if not simulation_flag:
+            balance_result_sell = submit_orders_arb(log_order)
+        else:
+            balance_result_sell = submit_orders_simulation(log_order)
+        print(balance_result_sell)
+
+        if force_stop:
+            print(f"Restarting loop since force stop is true")
+            return
+
+        open_trade = True
+
+        while not exit_short:
+            finish_trade = True
+            pass
+
+        order_book_result = order_book(symbol_use)
+        log_order = [{'side': 'buy', 'symbol': symbol_transformed,
+                      'amount': amount_btc_minimum,
+                      'price': order_book_result['asks'][0][0],
+                      'symbol_complete': symbol_use}]
+
+        if not simulation_flag:
+            balance_result_buy = submit_orders_arb(log_order)
+        else:
+            balance_result_buy = submit_orders_simulation(log_order)
+        print(balance_result_buy)
+
+        profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
+        profit_acc += profit_iteration
+
+        total_trades += 1
+
+        open_trade = False
+
+        print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n", flush=True)
+    #     # sys.exit()
+    finish_trade = True
+
 
 while True:
     try:
-
-        force_stop = False
-
-        symbol_transformed = f"{symbol_use.replace('/', '').lower()}"
-
-        if go_long:
-            go_long = False
-            print(f"starting a long", flush=True)
-            order_book_result = order_book(symbol_use)
-            log_order = [{'side': 'buy', 'symbol': symbol_transformed,
-                                    'amount': amount_btc_minimum,
-                                    'price': order_book_result['asks'][0][0],
-                                    'symbol_complete': symbol_use}]
-            if not simulation_flag:
-                balance_result_buy = submit_orders_arb(log_order)
-            else:
-                balance_result_buy = submit_orders_simulation(log_order)
-            print(balance_result_buy)
-
-            if force_stop:
-                print(f"Restarting loop since force stop is true")
-                continue
-
-            open_trade = True
-
-            while not exit_long:
-                finish_trade = True
-                pass
-
-            order_book_result = order_book(symbol_use)
-            log_order = [{'side': 'sell', 'symbol': symbol_transformed,
-                          'amount': amount_btc_minimum,
-                          'price': order_book_result['bids'][0][0],
-                          'symbol_complete': symbol_use}]
-
-            if not simulation_flag:
-                balance_result_sell = submit_orders_arb(log_order)
-            else:
-                balance_result_sell = submit_orders_simulation(log_order)
-            print(balance_result_sell)
-
-            profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
-
-            profit_acc += profit_iteration
-
-            total_trades += 1
-
-            open_trade = False
-
-            print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n", flush=True)
-            # sys.exit()
-
-        elif go_short:
-            go_short = False
-            print(f"starting a short", flush=True)
-            order_book_result = order_book(symbol_use)
-            log_order = [{'side': 'sell', 'symbol': symbol_transformed,
-                          'amount': amount_btc_minimum,
-                          'price': order_book_result['bids'][0][0],
-                          'symbol_complete': symbol_use}]
-
-            if not simulation_flag:
-                balance_result_sell = submit_orders_arb(log_order)
-            else:
-                balance_result_sell = submit_orders_simulation(log_order)
-            print(balance_result_sell)
-
-            if force_stop:
-                print(f"Restarting loop since force stop is true")
-                continue
-
-            open_trade = True
-
-            while not exit_short:
-                finish_trade = True
-                pass
-
-            order_book_result = order_book(symbol_use)
-            log_order = [{'side': 'buy', 'symbol': symbol_transformed,
-                          'amount': amount_btc_minimum,
-                          'price': order_book_result['asks'][0][0],
-                          'symbol_complete': symbol_use}]
-
-            if not simulation_flag:
-                balance_result_buy = submit_orders_arb(log_order)
-            else:
-                balance_result_buy = submit_orders_simulation(log_order)
-            print(balance_result_buy)
-
-            profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
-            profit_acc += profit_iteration
-
-            total_trades += 1
-
-            open_trade = False
-
-            print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n", flush=True)
-        #     # sys.exit()
-        finish_trade = True
+        trade()
 
     except Exception as ex:
         print(ex, flush=True)

@@ -545,23 +545,23 @@ cache_moving_average = defaultdict(dict)
 
 
 def simulation():
-    total_iterations = 10
+    total_iterations = 50
     global open_trade, cache_moving_average, stop_loss_percent, historical_trades, total_trades, finish_trade, last_trades, ma_short_freq, ma_long_freq, ma_very_long_freq, profit_acc, ws2, go_short, go_long, exit_long, exit_short
 
-    total_samples_opt = 100
-    total_samples_test = 50
+    total_samples_opt = 216000
+    total_samples_test = 43200
     start_row = 0
 
     profit_test = 0.0
 
-    while True: # total_samples_opt + start_row < len(historical_trades):
+    while total_samples_opt + start_row < len(historical_trades):
 
         max_profit = -1000.0
         max_total_trades = None
         max_config = None
 
-        # selected_trades_opt = historical_trades[start_row:start_row + total_samples_opt]
-        selected_trades_opt = historical_trades
+        selected_trades_opt = historical_trades[start_row:start_row + total_samples_opt]
+        # selected_trades_opt = historical_trades
 
         for iteration_index in range(total_iterations):
             ws2 = HandleWebsocketTrade()
@@ -569,41 +569,40 @@ def simulation():
             while open_trade:
                 exit_long, exit_short = True, True
             go_short, go_long,  exit_long, exit_short = False, False, False, False
-            # ma_short_freq = random.randint(2, 3)
+            # ma_short_freq = random.randint(2,3)
             ma_short_freq = 2 #3
-            # ma_long_freq = random.randrange(8, 60, 4)
-            ma_long_freq = 22
-            # ma_very_long_freq = random.randrange(180, 360, 20)
-            ma_very_long_freq = 360
-            # stop_loss_percent = random.choice([0.3, 0.5, 1.0])
-            stop_loss_percent = 0.5
+            ma_long_freq = random.randrange(6, 18, 1)
+            # ma_long_freq = 22
+            ma_very_long_freq = random.randrange(180, 360, 20)
+            # ma_very_long_freq = 360
+            stop_loss_percent = random.choice([0.3, 0.5])
+            # stop_loss_percent = 0.5
 
-            df = pd.DataFrame(selected_trades_opt)
+            cache_moving_average = defaultdict(dict)
+
+            df = pd.DataFrame(historical_trades)
 
             ma_short_mean = df['close'].rolling(window=ma_short_freq).mean().values
             ma_long_mean = df['close'].rolling(window=ma_long_freq).mean().values
             ma_very_long_mean = df['close'].rolling(window=ma_very_long_freq).mean().values
 
-            for index in range(len(selected_trades_opt)):
-                cache_moving_average[f"{ma_short_freq}"][f"{selected_trades_opt[index]['id']}"] = ma_short_mean[index]
-                cache_moving_average[f"{ma_long_freq}"][f"{selected_trades_opt[index]['id']}"] = ma_long_mean[index]
-                cache_moving_average[f"{ma_very_long_freq}"][f"{selected_trades_opt[index]['id']}"] = ma_very_long_mean[index]
+            for index in range(len(historical_trades)):
+                cache_moving_average[f"{ma_short_freq}"][f"{historical_trades[index]['id']}"] = ma_short_mean[index]
+                cache_moving_average[f"{ma_long_freq}"][f"{historical_trades[index]['id']}"] = ma_long_mean[index]
+                cache_moving_average[f"{ma_very_long_freq}"][f"{historical_trades[index]['id']}"] = ma_very_long_mean[index]
 
             profit_acc = 0.0
             last_trades = selected_trades_opt[:ma_very_long_freq]
             total_trades = 0
-            print(f"Starting simulaton waiting 5s:last_trades{last_trades[0]} {last_trades[-1]}")
             time.sleep(5)
-            for msg in selected_trades_opt[ma_very_long_freq:]:
-                # print(f"{msg}")
-                finish_trade = False
-                while not finish_trade:
-                    pass
+            trades = selected_trades_opt[ma_very_long_freq:]
+            with open("log.txt", "a") as f:
+                print(f"Starting simulaton waiting 5s:cold start {datetime.utcfromtimestamp(last_trades[0]['id'])} "
+                  f"{datetime.utcfromtimestamp(last_trades[-1]['id'])} "
+                  f"trade start:{datetime.utcfromtimestamp(trades[0]['id'])} "
+                  f"trade end:{datetime.utcfromtimestamp(trades[-1]['id'])}", flush=True, file=f)
+            trade(simulation_data={'ws2': ws2, 'trades': trades, 'max_index': len(trades)})
 
-                best_bid['btcusdt'] = {'price': msg['open'], 'qtd': 0}
-                best_ask['btcusdt'] = {'price': msg['open'], 'qtd': 0}
-                msg['type'] = 'candle.M1.btcusdt'
-                ws2.handle(msg)
             if profit_acc > max_profit:
                 max_profit = profit_acc
                 max_total_trades = total_trades
@@ -624,49 +623,205 @@ def simulation():
 
         ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent = max_config
 
+        cache_moving_average = defaultdict(dict)
+
+        df = pd.DataFrame(historical_trades)
+
+        ma_short_mean = df['close'].rolling(window=ma_short_freq).mean().values
+        ma_long_mean = df['close'].rolling(window=ma_long_freq).mean().values
+        ma_very_long_mean = df['close'].rolling(window=ma_very_long_freq).mean().values
+
+        for index in range(len(historical_trades)):
+            cache_moving_average[f"{ma_short_freq}"][f"{historical_trades[index]['id']}"] = ma_short_mean[index]
+            cache_moving_average[f"{ma_long_freq}"][f"{historical_trades[index]['id']}"] = ma_long_mean[index]
+            cache_moving_average[f"{ma_very_long_freq}"][f"{historical_trades[index]['id']}"] = ma_very_long_mean[index]
+
         selected_trades_test = historical_trades[total_samples_opt + start_row - ma_very_long_freq:]
         last_trades = selected_trades_test[:ma_very_long_freq]
-
-        with open("log_test.txt", "a") as f:
-            print(f"Start time opt:{datetime.utcfromtimestamp(selected_trades_opt[0]['id'])} "
-                  f"end time opt:{datetime.utcfromtimestamp(selected_trades_opt[-1]['id'])} "
-                  f"start time test:{datetime.utcfromtimestamp(selected_trades_test[ma_very_long_freq]['id'])} "
-                  f"end time:{datetime.utcfromtimestamp(selected_trades_test[-1]['id'])}", flush=True, file=f)
-        # stop_loss_percent = 0.5
 
         profit_acc = 0.0
 
         total_trades = 0
-        print(f"Starting simulaton waiting 5s:last_trades{last_trades[0]} {last_trades[-1]}")
+
         time.sleep(5)
 
-        index_sample_test = 0
+        trades = selected_trades_test[ma_very_long_freq:]
+        if len(trades) > 0:
+            with open("log_test.txt", "a") as f:
+                print(f"Starting test waiting 5s:last_trades cold start{datetime.utcfromtimestamp(last_trades[0]['id'])} "
+                      f"{datetime.utcfromtimestamp(last_trades[-1]['id'])} "
+                      f"start sample test:{datetime.utcfromtimestamp(trades[0]['id'])} "
+                      f"end sample test:{datetime.utcfromtimestamp(trades[total_samples_test]['id'])}", flush=True, file=f)
+            trade(simulation_data={'ws2': ws2, 'trades': trades, 'max_index': total_samples_test})
 
-        if max_profit > 0.0:
+            profit_test += profit_acc
 
-            while index_sample_test < total_samples_test or not open_trade:
-                finish_trade = False
-                while not finish_trade:
-                    pass
-                msg = selected_trades_test[index_sample_test]
-                best_bid['btcusdt'] = {'price': msg['open'], 'qtd': 0}
-                best_ask['btcusdt'] = {'price': msg['open'], 'qtd': 0}
-                msg['type'] = 'candle.M1.btcusdt'
-                ws2.handle(msg)
-
-                index_sample_test += 1
-        else:
-            print(f"Not able to find any profitable situation.. so trader will not work:max profit:{max_profit}")
-
-        profit_test += profit_acc
-
-        with open("log_test.txt", "a") as f:
-            print(f"End test: finished profit:{profit_acc} profit test acc:{profit_test} "
-                  f"total trades:{total_trades} ma_short_freq:{ma_short_freq} "
-                  f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq}\n\n\n", flush=True, file=f)
+            with open("log_test.txt", "a") as f:
+                print(f"End test: finished profit:{profit_acc} profit test acc:{profit_test} "
+                      f"total trades:{total_trades} ma_short_freq:{ma_short_freq} "
+                      f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq} "
+                      f"stop_loss_percent:{stop_loss_percent} last candle:{last_trades[-1]}\n\n\n", flush=True, file=f)
 
         start_row += total_samples_test
-        sys.exit()
+
+
+profit_acc = 0.0
+total_trades = 0
+pair_to_remove = []
+amount_btc_minimum = 0.005
+
+# starting...
+# print(f"Waiting {back_time_limit_seconds} seconds to store power")
+# time.sleep(back_time_limit_seconds)
+
+last_show_status = datetime.now()
+
+wait_time_until_finish_seconds = 50
+symbol_use = 'BTC/USDT'
+
+
+def trade(simulation_data=None):
+    global force_stop, go_short, go_long, open_trade, finish_trade, profit_acc, total_trades, exit_long, exit_short
+
+    index = 0
+
+    def next_msg():
+        nonlocal index
+        global exit_long, exit_short
+
+        if index >= simulation_data['max_index']:
+            exit_long, exit_short = True, True
+            return False
+
+        msg = simulation_data['trades'][index]
+        ws2 = simulation_data['ws2']
+
+        best_bid['btcusdt'] = {'price': msg['open'], 'qtd': 0}
+        best_ask['btcusdt'] = {'price': msg['open'], 'qtd': 0}
+        msg['type'] = 'candle.M1.btcusdt'
+        ws2.handle(msg)
+
+        index += 1
+        return True
+
+    while simulation_data is None or index < simulation_data['max_index']:
+        try:
+            force_stop = False
+
+            symbol_transformed = f"{symbol_use.replace('/', '').lower()}"
+
+            if simulation_flag:
+                next_msg()
+
+            if go_long:
+                go_long = False
+                print(f"starting a long", flush=True)
+                order_book_result = order_book(symbol_use)
+                log_order = [{'side': 'buy', 'symbol': symbol_transformed,
+                              'amount': amount_btc_minimum,
+                              'price': order_book_result['asks'][0][0],
+                              'symbol_complete': symbol_use}]
+                if not simulation_flag:
+                    balance_result_buy = submit_orders_arb(log_order)
+                else:
+                    balance_result_buy = submit_orders_simulation(log_order)
+                print(balance_result_buy)
+
+                if force_stop:
+                    print(f"Restarting loop since force stop is true")
+                    return
+
+                open_trade = True
+
+                while not exit_long:
+                    if simulation_flag:
+                        valid = next_msg()
+                        if not valid:
+                            continue
+                    finish_trade = True
+                    pass
+
+                order_book_result = order_book(symbol_use)
+                log_order = [{'side': 'sell', 'symbol': symbol_transformed,
+                              'amount': amount_btc_minimum,
+                              'price': order_book_result['bids'][0][0],
+                              'symbol_complete': symbol_use}]
+
+                if not simulation_flag:
+                    balance_result_sell = submit_orders_arb(log_order)
+                else:
+                    balance_result_sell = submit_orders_simulation(log_order)
+                print(balance_result_sell)
+
+                profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
+
+                profit_acc += profit_iteration
+
+                total_trades += 1
+
+                open_trade = False
+
+                print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n",
+                      flush=True)
+                # sys.exit()
+
+            elif go_short:
+                go_short = False
+                print(f"starting a short", flush=True)
+                order_book_result = order_book(symbol_use)
+                log_order = [{'side': 'sell', 'symbol': symbol_transformed,
+                              'amount': amount_btc_minimum,
+                              'price': order_book_result['bids'][0][0],
+                              'symbol_complete': symbol_use}]
+
+                if not simulation_flag:
+                    balance_result_sell = submit_orders_arb(log_order)
+                else:
+                    balance_result_sell = submit_orders_simulation(log_order)
+                print(balance_result_sell)
+
+                if force_stop:
+                    print(f"Restarting loop since force stop is true")
+                    return
+
+                open_trade = True
+
+                while not exit_short:
+                    if simulation_flag:
+                        valid = next_msg()
+                        if not valid:
+                            continue
+                    finish_trade = True
+                    pass
+
+                order_book_result = order_book(symbol_use)
+                log_order = [{'side': 'buy', 'symbol': symbol_transformed,
+                              'amount': amount_btc_minimum,
+                              'price': order_book_result['asks'][0][0],
+                              'symbol_complete': symbol_use}]
+
+                if not simulation_flag:
+                    balance_result_buy = submit_orders_arb(log_order)
+                else:
+                    balance_result_buy = submit_orders_simulation(log_order)
+                print(balance_result_buy)
+
+                profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
+                profit_acc += profit_iteration
+
+                total_trades += 1
+
+                open_trade = False
+
+                print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n",
+                      flush=True)
+            #     # sys.exit()
+            finish_trade = True
+
+        except Exception as ex:
+            print(ex, flush=True)
+            traceback.print_exc()
+            sys.exit()
 
 
 if not simulation_flag:
@@ -675,11 +830,12 @@ if not simulation_flag:
 
     Thread(target=sub,args=(topics,)).start()
     Thread(target=sub2,args=(topics_trades,)).start()
+    trade()
 
 else:
 
     historical_trades = []
-    start_date = datetime(2019, 7, 1)
+    start_date = datetime(2018, 10, 1)
     result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
     historical_trades.extend(result)
     last_time_seconds = result[-1]['id']
@@ -708,137 +864,13 @@ else:
             print(f"result:{result[0]['id']}")
 
     historical_trades.reverse()
-    # simulation()
-    Thread(target=simulation,args=()).start()
+    simulation()
+    # Thread(target=simulation,args=()).start()
 
 
 
 # fee = 1 - exchange.fees['trading']['taker']
 # fee = 1 - 0.0006
 
-profit_acc = 0.0
-total_trades = 0
-pair_to_remove = []
-amount_btc_minimum = 0.005
 
-# starting...
-# print(f"Waiting {back_time_limit_seconds} seconds to store power")
-# time.sleep(back_time_limit_seconds)
-
-last_show_status = datetime.now()
-
-wait_time_until_finish_seconds = 50
-symbol_use = 'BTC/USDT'
-
-
-def trade():
-    global force_stop, go_short, go_long, open_trade, finish_trade, profit_acc, total_trades
-    force_stop = False
-
-    symbol_transformed = f"{symbol_use.replace('/', '').lower()}"
-
-    if go_long:
-        go_long = False
-        print(f"starting a long", flush=True)
-        order_book_result = order_book(symbol_use)
-        log_order = [{'side': 'buy', 'symbol': symbol_transformed,
-                      'amount': amount_btc_minimum,
-                      'price': order_book_result['asks'][0][0],
-                      'symbol_complete': symbol_use}]
-        if not simulation_flag:
-            balance_result_buy = submit_orders_arb(log_order)
-        else:
-            balance_result_buy = submit_orders_simulation(log_order)
-        print(balance_result_buy)
-
-        if force_stop:
-            print(f"Restarting loop since force stop is true")
-            return
-
-        open_trade = True
-
-        while not exit_long:
-            finish_trade = True
-            pass
-
-        order_book_result = order_book(symbol_use)
-        log_order = [{'side': 'sell', 'symbol': symbol_transformed,
-                      'amount': amount_btc_minimum,
-                      'price': order_book_result['bids'][0][0],
-                      'symbol_complete': symbol_use}]
-
-        if not simulation_flag:
-            balance_result_sell = submit_orders_arb(log_order)
-        else:
-            balance_result_sell = submit_orders_simulation(log_order)
-        print(balance_result_sell)
-
-        profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
-
-        profit_acc += profit_iteration
-
-        total_trades += 1
-
-        open_trade = False
-
-        print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n", flush=True)
-        # sys.exit()
-
-    elif go_short:
-        go_short = False
-        print(f"starting a short", flush=True)
-        order_book_result = order_book(symbol_use)
-        log_order = [{'side': 'sell', 'symbol': symbol_transformed,
-                      'amount': amount_btc_minimum,
-                      'price': order_book_result['bids'][0][0],
-                      'symbol_complete': symbol_use}]
-
-        if not simulation_flag:
-            balance_result_sell = submit_orders_arb(log_order)
-        else:
-            balance_result_sell = submit_orders_simulation(log_order)
-        print(balance_result_sell)
-
-        if force_stop:
-            print(f"Restarting loop since force stop is true")
-            return
-
-        open_trade = True
-
-        while not exit_short:
-            finish_trade = True
-            pass
-
-        order_book_result = order_book(symbol_use)
-        log_order = [{'side': 'buy', 'symbol': symbol_transformed,
-                      'amount': amount_btc_minimum,
-                      'price': order_book_result['asks'][0][0],
-                      'symbol_complete': symbol_use}]
-
-        if not simulation_flag:
-            balance_result_buy = submit_orders_arb(log_order)
-        else:
-            balance_result_buy = submit_orders_simulation(log_order)
-        print(balance_result_buy)
-
-        profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
-        profit_acc += profit_iteration
-
-        total_trades += 1
-
-        open_trade = False
-
-        print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n", flush=True)
-    #     # sys.exit()
-    finish_trade = True
-
-
-while True:
-    try:
-        trade()
-
-    except Exception as ex:
-        print(ex, flush=True)
-        traceback.print_exc()
-        sys.exit()
 

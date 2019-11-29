@@ -677,12 +677,13 @@ def simulation():
 
         trades = selected_trades_test[ma_very_long_freq:]
         if len(trades) > 0:
+            max_index = total_samples_test if total_samples_test < len(trades) else len(trades)
             with open("log_test.txt", "a") as f:
                 print(f"Starting test waiting 5s:last_trades cold start{datetime.utcfromtimestamp(last_trades[0]['id'])} "
                       f"{datetime.utcfromtimestamp(last_trades[-1]['id'])} "
                       f"start sample test:{datetime.utcfromtimestamp(trades[0]['id'])} "
-                      f"end sample test:{datetime.utcfromtimestamp(trades[total_samples_test]['id'])}", flush=True, file=f)
-            trade(simulation_data={'ws2': ws2, 'trades': trades, 'max_index': total_samples_test})
+                      f"end sample test:{datetime.utcfromtimestamp(trades[max_index - 1]['id'])}", flush=True, file=f)
+            trade(simulation_data={'ws2': ws2, 'trades': trades, 'max_index': max_index})
 
             profit_test += profit_acc
 

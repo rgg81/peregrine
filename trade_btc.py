@@ -71,6 +71,10 @@ ma_very_long_freq = 173
 stop_loss_percent = 0.1
 
 
+stop_gain = True
+stop_gain_rates = [x * 0.5 for x in range(1, 5)]
+
+
 class HandleWebsocketTrade(WebsocketClient):
 
     open_price = None
@@ -87,6 +91,8 @@ class HandleWebsocketTrade(WebsocketClient):
 
     stop_loss_price_up = None
     stop_loss_price_down = None
+    enter_ref_price_up = None
+    enter_ref_price_down = None
 
 
 
@@ -114,6 +120,14 @@ class HandleWebsocketTrade(WebsocketClient):
 
                     last_trades.append(self.last_message)
                     last_trades = last_trades[-ma_very_long_freq-20:]
+
+                    stop_gain_up_bool = stop_gain and any([self.enter_ref_price_up is not None and
+                                         self.last_message['open'] > (1 + x/100) * self.enter_ref_price_up > self.last_message['close']
+                                         for x in stop_gain_rates])
+
+                    stop_gain_down_bool = stop_gain and any([self.enter_ref_price_down is not None and
+                                                            self.last_message['open'] < (1 - x/100) * self.enter_ref_price_down < self.last_message['close']
+                                                            for x in stop_gain_rates])
 
                     ma_short = moving_average(ma_short_freq)
                     ma_long = moving_average(ma_long_freq)
@@ -162,22 +176,34 @@ class HandleWebsocketTrade(WebsocketClient):
                         print(f"Found stop loss down:{self.stop_loss_price_down} "
                               f"{self.last_message} {self.last_message['close']}")
 
-                    exit_long = self.is_short_cross_down or stop_loss_up_bool
+                    if stop_gain_up_bool:
+                        print(f"Found stop gain up:{self.last_message['open']} "
+                              f"{self.last_message['close']}")
+
+                    if stop_gain_down_bool:
+                        print(f"Found stop gain down:{self.last_message['open']} "
+                              f"{self.last_message['close']}")
+
+                    exit_long = self.is_short_cross_down or stop_loss_up_bool or stop_gain_up_bool
                     if exit_long:
                         self.stop_loss_price_up = None
+                        self.enter_ref_price_up = None
 
-                    exit_short = self.is_short_cross_up or stop_loss_down_bool
+                    exit_short = self.is_short_cross_up or stop_loss_down_bool or stop_gain_down_bool
                     if exit_short:
                         self.stop_loss_price_down = None
+                        self.enter_ref_price_down = None
 
                     go_long = self.is_short_cross_up and short_above_long and self.is_up_ma_very_long
                     go_short = self.is_short_cross_down and short_below_long and self.is_down_ma_very_long
 
                     if go_long:
                         self.stop_loss_price_up = self.last_message['close'] * (1 - stop_loss_percent/100)
+                        self.enter_ref_price_up = self.last_message['close']
 
                     if go_short:
                         self.stop_loss_price_down = self.last_message['close'] * (1 + stop_loss_percent/100)
+                        self.enter_ref_price_down = self.last_message['close']
 
                     if not simulation_flag:
                         print(f"ts:{self.last_ts} "
@@ -546,10 +572,13 @@ cache_moving_average = defaultdict(dict)
 
 def simulation():
     total_iterations = 50
-    global open_trade, cache_moving_average, stop_loss_percent, historical_trades, total_trades, finish_trade, last_trades, ma_short_freq, ma_long_freq, ma_very_long_freq, profit_acc, ws2, go_short, go_long, exit_long, exit_short
+    global stop_gain, open_trade, cache_moving_average, stop_loss_percent, historical_trades, total_trades, finish_trade, last_trades, ma_short_freq, ma_long_freq, ma_very_long_freq, profit_acc, ws2, go_short, go_long, exit_long, exit_short
 
-    total_samples_opt = 216000
-    total_samples_test = 43200
+    # total_samples_opt = 216000
+    # total_samples_test = 43200
+
+    total_samples_opt = 144000
+    total_samples_test = 14400
     start_row = 0
 
     profit_test = 0.0
@@ -576,6 +605,7 @@ def simulation():
             ma_very_long_freq = random.randrange(180, 360, 20)
             # ma_very_long_freq = 360
             stop_loss_percent = random.choice([0.3, 0.5])
+            stop_gain = random.choice([True, False])
             # stop_loss_percent = 0.5
 
             cache_moving_average = defaultdict(dict)
@@ -594,7 +624,6 @@ def simulation():
             profit_acc = 0.0
             last_trades = selected_trades_opt[:ma_very_long_freq]
             total_trades = 0
-            time.sleep(5)
             trades = selected_trades_opt[ma_very_long_freq:]
             with open("log.txt", "a") as f:
                 print(f"Starting simulaton waiting 5s:cold start {datetime.utcfromtimestamp(last_trades[0]['id'])} "
@@ -606,10 +635,11 @@ def simulation():
             if profit_acc > max_profit:
                 max_profit = profit_acc
                 max_total_trades = total_trades
-                max_config = ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent
+                max_config = ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent, stop_gain
             with open("log.txt", "a") as f:
                 print(f"End simulation: finished profit:{profit_acc} total trades:{total_trades} ma_short_freq:{ma_short_freq} "
-                  f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq} stop_loss_percent:{stop_loss_percent} iteration:{iteration_index} "
+                  f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq} stop_loss_percent:{stop_loss_percent} "
+                      f"stop_gain:{stop_gain} iteration:{iteration_index} "
                   f"max_profit:{max_profit} max_total_trades:{max_total_trades} max_config:{max_config}\n\n\n", flush=True, file=f)
 
         ws2 = HandleWebsocketTrade()
@@ -621,7 +651,7 @@ def simulation():
 
         print(f"Starting test with max config:{max_config}")
 
-        ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent = max_config
+        ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent, stop_gain = max_config
 
         cache_moving_average = defaultdict(dict)
 
@@ -660,7 +690,7 @@ def simulation():
                 print(f"End test: finished profit:{profit_acc} profit test acc:{profit_test} "
                       f"total trades:{total_trades} ma_short_freq:{ma_short_freq} "
                       f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq} "
-                      f"stop_loss_percent:{stop_loss_percent} last candle:{last_trades[-1]}\n\n\n", flush=True, file=f)
+                      f"stop_loss_percent:{stop_loss_percent} stop_gain:{stop_gain} last candle:{last_trades[-1]}\n\n\n", flush=True, file=f)
 
         start_row += total_samples_test
 

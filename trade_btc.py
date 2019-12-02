@@ -72,7 +72,7 @@ stop_loss_percent = 0.5
 
 
 stop_gain = True
-stop_gain_rates = [x * 0.5 for x in range(1, 5)]
+stop_gain_rates = [x * 1.5 for x in range(1, 5)]
 
 
 class HandleWebsocketTrade(WebsocketClient):
@@ -260,7 +260,7 @@ ws2 = HandleWebsocketTrade()
 # ws.close()
 
 fee_config = {
-    'binance': 0.0006,
+    'binance': 0.0004,
     'fcoin': {
         'fee': 0.0,
         'ZEC': 0.0003,
@@ -434,7 +434,7 @@ def submit_orders_simulation(log_orders):
             print(f"currencies_balance[start]:{currencies_balance[start]}", flush=True)
 
             end_amount = a_log_order['amount']
-            currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
+            currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount * (1.0 - fee_config['binance'])
             print(f"currencies_balance[end]:{currencies_balance[end]}", flush=True)
 
         else:
@@ -444,7 +444,7 @@ def submit_orders_simulation(log_orders):
             currencies_balance[start] = currencies_balance.get(start, 0.0) - filled_amount
             print(f"currencies_balance[start]:{currencies_balance[start]}", flush=True)
 
-            end_amount = a_log_order['amount'] * a_log_order['price']
+            end_amount = a_log_order['amount'] * (1.0 - fee_config['binance']) * a_log_order['price']
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
             print(f"currencies_balance[end]:{currencies_balance[end]}", flush=True)
     print(f"Final balances:{currencies_balance}", flush=True)
@@ -572,14 +572,14 @@ topics_trades = {
     "args": ["candle.M1.btcusdt"]
 }
 
-simulation_flag = False
+simulation_flag = True
 finish_trade = False
 open_trade = False
 cache_moving_average = defaultdict(dict)
 
 
 def simulation():
-    total_iterations = 70
+    total_iterations = 200
     global stop_gain, open_trade, cache_moving_average, stop_loss_percent, historical_trades, total_trades, finish_trade, last_trades, ma_short_freq, ma_long_freq, ma_very_long_freq, profit_acc, ws2, go_short, go_long, exit_long, exit_short
 
     # total_samples_opt = 216000
@@ -606,14 +606,14 @@ def simulation():
             while open_trade:
                 exit_long, exit_short = True, True
             go_short, go_long,  exit_long, exit_short = False, False, False, False
-            ma_short_freq = random.randint(2, 3)
+            ma_short_freq = random.randrange(20, 90, 2)
             # ma_short_freq = 2 #3
             # ma_long_freq = random.randrange(6, 18, 1)
-            ma_long_freq = random.randrange(8, 22, 1)
+            ma_long_freq = random.randrange(200, 600, 4)
             # ma_long_freq = 22
-            ma_very_long_freq = random.randrange(180, 380, 20)
+            ma_very_long_freq = random.randrange(1800, 7000, 40)
             # ma_very_long_freq = 360
-            stop_loss_percent = random.choice([0.3, 0.5])
+            stop_loss_percent = random.choice([1.5, 3.0])
             stop_gain = random.choice([True, False])
             # stop_loss_percent = 0.5
 
@@ -875,35 +875,28 @@ if not simulation_flag:
 else:
 
     historical_trades = []
-    start_date = datetime(2019, 5, 1)
+    start_date = datetime(2018, 5, 1)
     result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
     historical_trades.extend(result)
     last_time_seconds = result[-1]['id']
+    binance = ccxt.binance({
+        'timeout': 30000
+    })
 
     while last_time_seconds > start_date.timestamp() and len(result) > 1:
-        result = fcoin.Api().market.get_candle_info_before('M1', 'btcusdt', last_time_seconds)['data']
-        if len(result) > 1:
-            last_time_seconds = result[-1]['id']
-            result = result[1:]
-            historical_trades.extend(result)
-            print(f"result:{result[0]['id']}")
-        else:
-            binance = ccxt.binance({
-                'timeout': 30000
-            })
-            symbol = 'BTC/USDT'
-            timeframe = '1m'
-            result = binance.fetch_ohlcv(symbol, timeframe, params={'endTime': last_time_seconds*1000, 'limit': 1000})
-            # result = binance.convert_ohlcv_to_trading_view(result)
-            result.reverse()
+        symbol = 'BTC/USDT'
+        timeframe = '1m'
+        result = binance.fetch_ohlcv(symbol, timeframe, params={'endTime': last_time_seconds*1000, 'limit': 1000})
+        # result = binance.convert_ohlcv_to_trading_view(result)
+        result.reverse()
 
-            result = result[1:]
+        result = result[1:]
 
-            result = [{'open': x[1], 'high': x[2], 'low': x[3], 'close': x[4], 'base_vol': x[5], 'id': x[0] // 1000} for x in result]
-            last_time_seconds = result[-1]['id']
+        result = [{'open': x[1], 'high': x[2], 'low': x[3], 'close': x[4], 'base_vol': x[5], 'id': x[0] // 1000} for x in result]
+        last_time_seconds = result[-1]['id']
 
-            historical_trades.extend(result)
-            print(f"result:{result[0]['id']}")
+        historical_trades.extend(result)
+        print(f"result:{result[0]['id']}")
 
     historical_trades.reverse()
     simulation()

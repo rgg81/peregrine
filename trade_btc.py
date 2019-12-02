@@ -65,10 +65,10 @@ def filter_last_trades():
     last_trades = [x for x in last_trades if x['ts'] > millis_past_minute]
 
 
-ma_short_freq = 5 # 5, 21, 173
-ma_long_freq = 21
-ma_very_long_freq = 173
-stop_loss_percent = 0.1
+ma_short_freq = 2 # 5, 21, 173
+ma_long_freq = 8
+ma_very_long_freq = 220
+stop_loss_percent = 0.5
 
 
 stop_gain = True
@@ -496,6 +496,10 @@ def submit_orders_arb(log_orders, enter_order=False):
             start = quote_currency
             end = base_currency
             total = sum([float(x['data']['filled_amount']) * float(x['data']['price']) for x in orders])
+
+            rate_price_close = sum([last_trades[-1]['close'] / float(x['data']['price']) for x in orders])/len(orders)
+            print(f"rate enter price:{rate_price_close} close:{last_trades[-1]['close']} mean order price:{sum([float(x['data']['price']) for x in orders])/len(orders)}", flush=True)
+
             print(f"currencies_balance[start] = {currencies_balance.get(start, 0.0)} - {total}")
             currencies_balance[start] = currencies_balance.get(start, 0.0) - total
             print(f"currencies_balance[start]:{currencies_balance[start]}")
@@ -508,6 +512,10 @@ def submit_orders_arb(log_orders, enter_order=False):
             end = quote_currency
             start = base_currency
             filled_amount = sum([float(x['data']['filled_amount']) for x in orders])
+
+            rate_price_close = sum([last_trades[-1]['close'] / float(x['data']['price']) for x in orders])/len(orders)
+            print(f"rate enter price:{rate_price_close} close:{last_trades[-1]['close']} mean order price:{sum([float(x['data']['price']) for x in orders])/len(orders)}", flush=True)
+
             currencies_balance[start] = currencies_balance.get(start, 0.0) - filled_amount
             print(f"currencies_balance[start]:{currencies_balance[start]}")
 
@@ -564,14 +572,14 @@ topics_trades = {
     "args": ["candle.M1.btcusdt"]
 }
 
-simulation_flag = True
+simulation_flag = False
 finish_trade = False
 open_trade = False
 cache_moving_average = defaultdict(dict)
 
 
 def simulation():
-    total_iterations = 50
+    total_iterations = 70
     global stop_gain, open_trade, cache_moving_average, stop_loss_percent, historical_trades, total_trades, finish_trade, last_trades, ma_short_freq, ma_long_freq, ma_very_long_freq, profit_acc, ws2, go_short, go_long, exit_long, exit_short
 
     # total_samples_opt = 216000
@@ -598,11 +606,12 @@ def simulation():
             while open_trade:
                 exit_long, exit_short = True, True
             go_short, go_long,  exit_long, exit_short = False, False, False, False
-            # ma_short_freq = random.randint(2,3)
-            ma_short_freq = 2 #3
-            ma_long_freq = random.randrange(6, 18, 1)
+            ma_short_freq = random.randint(2, 3)
+            # ma_short_freq = 2 #3
+            # ma_long_freq = random.randrange(6, 18, 1)
+            ma_long_freq = random.randrange(8, 22, 1)
             # ma_long_freq = 22
-            ma_very_long_freq = random.randrange(180, 360, 20)
+            ma_very_long_freq = random.randrange(180, 380, 20)
             # ma_very_long_freq = 360
             stop_loss_percent = random.choice([0.3, 0.5])
             stop_gain = random.choice([True, False])
@@ -632,15 +641,15 @@ def simulation():
                   f"trade end:{datetime.utcfromtimestamp(trades[-1]['id'])}", flush=True, file=f)
             trade(simulation_data={'ws2': ws2, 'trades': trades, 'max_index': len(trades)})
 
-            if profit_acc > max_profit:
+            if max_total_trades is None or profit_acc > max_profit:# profit_acc/total_trades > max_profit/max_total_trades:
                 max_profit = profit_acc
                 max_total_trades = total_trades
                 max_config = ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent, stop_gain
             with open("log.txt", "a") as f:
-                print(f"End simulation: finished profit:{profit_acc} total trades:{total_trades} ma_short_freq:{ma_short_freq} "
+                print(f"End simulation: finished profit:{profit_acc} total trades:{total_trades} rate:{round(profit_acc/total_trades,5)} ma_short_freq:{ma_short_freq} "
                   f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq} stop_loss_percent:{stop_loss_percent} "
                       f"stop_gain:{stop_gain} iteration:{iteration_index} "
-                  f"max_profit:{max_profit} max_total_trades:{max_total_trades} max_config:{max_config}\n\n\n", flush=True, file=f)
+                  f"max_profit:{max_profit} max_total_trades:{max_total_trades} max rate:{round(max_profit/max_total_trades,5)} max_config:{max_config}\n\n\n", flush=True, file=f)
 
         ws2 = HandleWebsocketTrade()
 
@@ -866,7 +875,7 @@ if not simulation_flag:
 else:
 
     historical_trades = []
-    start_date = datetime(2018, 10, 1)
+    start_date = datetime(2019, 5, 1)
     result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
     historical_trades.extend(result)
     last_time_seconds = result[-1]['id']
@@ -879,7 +888,9 @@ else:
             historical_trades.extend(result)
             print(f"result:{result[0]['id']}")
         else:
-            binance = ccxt.binance()
+            binance = ccxt.binance({
+                'timeout': 30000
+            })
             symbol = 'BTC/USDT'
             timeframe = '1m'
             result = binance.fetch_ohlcv(symbol, timeframe, params={'endTime': last_time_seconds*1000, 'limit': 1000})

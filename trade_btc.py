@@ -366,7 +366,7 @@ async def change_price(order_detail, price, symbol_complete, enter_order=False):
 
 
 async def change_best_price(order_detail, symbol_complete, enter_order=False):
-    order_book_inst = await order_book(order_detail['data']['symbol'])
+    order_book_inst = order_book(order_detail['data']['symbol'])
     if order_detail['data']['side'] == 'sell':
         price = order_book_inst['bids'][0][0]
     else:

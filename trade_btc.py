@@ -783,7 +783,7 @@ def trade(simulation_data=None):
 
                 order_book_result = order_book(symbol_use)
                 log_order = [{'side': 'sell', 'symbol': symbol_transformed,
-                              'amount': amount_btc_minimum,
+                              'amount': balance_result_buy['BTC'],
                               'price': order_book_result['bids'][0][0],
                               'symbol_complete': symbol_use}]
 
@@ -836,7 +836,7 @@ def trade(simulation_data=None):
 
                 order_book_result = order_book(symbol_use)
                 log_order = [{'side': 'buy', 'symbol': symbol_transformed,
-                              'amount': amount_btc_minimum,
+                              'amount': balance_result_sell['BTC'],
                               'price': order_book_result['asks'][0][0],
                               'symbol_complete': symbol_use}]
 

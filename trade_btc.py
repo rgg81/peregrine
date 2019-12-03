@@ -812,7 +812,7 @@ def trade(simulation_data=None):
 
                 print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n",
                       flush=True)
-                sys.exit()
+                # sys.exit()
 
             elif go_short:
                 go_short = False

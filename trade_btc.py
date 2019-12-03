@@ -139,7 +139,7 @@ class HandleWebsocketTrade(WebsocketClient):
                     self.is_up_ma_short = ma_short >= ma_short_before
                     self.is_down_ma_short = ma_short <= ma_short_before
 
-                    self.is_up_ma_very_long = ma_very_long < ma_long and ma_very_long < ma_short and ma_very_long >= ma_very_long_freq
+                    self.is_up_ma_very_long = ma_very_long < ma_long and ma_very_long < ma_short and ma_very_long >= ma_very_long_before
                     self.is_down_ma_very_long = ma_very_long > ma_long and ma_very_long > ma_short and ma_very_long <= ma_very_long_before
 
                     self.is_short_cross_up = short_below_long_before and short_above_long
@@ -579,7 +579,7 @@ cache_moving_average = defaultdict(dict)
 
 
 def simulation():
-    total_iterations = 200
+    total_iterations = 100
     global stop_gain, open_trade, cache_moving_average, stop_loss_percent, historical_trades, total_trades, finish_trade, last_trades, ma_short_freq, ma_long_freq, ma_very_long_freq, profit_acc, ws2, go_short, go_long, exit_long, exit_short
 
     # total_samples_opt = 216000
@@ -597,8 +597,8 @@ def simulation():
         max_total_trades = None
         max_config = None
 
-        selected_trades_opt = historical_trades[start_row:start_row + total_samples_opt]
-        # selected_trades_opt = historical_trades
+        # selected_trades_opt = historical_trades[start_row:start_row + total_samples_opt]
+        selected_trades_opt = historical_trades
 
         for iteration_index in range(total_iterations):
             ws2 = HandleWebsocketTrade()
@@ -606,12 +606,12 @@ def simulation():
             while open_trade:
                 exit_long, exit_short = True, True
             go_short, go_long,  exit_long, exit_short = False, False, False, False
-            ma_short_freq = random.randrange(20, 90, 2)
+            ma_short_freq = random.randrange(2, 70, 2)
             # ma_short_freq = 2 #3
             # ma_long_freq = random.randrange(6, 18, 1)
-            ma_long_freq = random.randrange(200, 600, 4)
+            ma_long_freq = random.randrange(70, 600, 4)
             # ma_long_freq = 22
-            ma_very_long_freq = random.randrange(1800, 7000, 40)
+            ma_very_long_freq = random.randrange(640, 7000, 40)
             # ma_very_long_freq = 360
             stop_loss_percent = random.choice([1.5, 3.0])
             stop_gain = random.choice([True, False])
@@ -875,7 +875,7 @@ if not simulation_flag:
 else:
 
     historical_trades = []
-    start_date = datetime(2018, 5, 1)
+    start_date = datetime(2019, 1, 1)
     result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
     historical_trades.extend(result)
     last_time_seconds = result[-1]['id']

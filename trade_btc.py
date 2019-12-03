@@ -300,7 +300,10 @@ async def create_order(symbol, side, price, amount):
     else:
         amount_str = str(amount)
 
-    order_create_param = fcoin.order_create_param(symbol_transformed, side, 'limit', str(price), amount_str)
+    if side == 'buy':
+        amount_str = str(round(amount * price, 1))
+
+    order_create_param = fcoin.order_create_param(symbol_transformed, side, 'market', '', amount_str)
     result = api_auth.orders.create(order_create_param)
     print(result)
     return result
@@ -708,7 +711,7 @@ def simulation():
 profit_acc = 0.0
 total_trades = 0
 pair_to_remove = []
-amount_btc_minimum = 0.005
+amount_btc_minimum = 0.006
 
 # starting...
 # print(f"Waiting {back_time_limit_seconds} seconds to store power")
@@ -879,7 +882,9 @@ else:
     result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
     historical_trades.extend(result)
     last_time_seconds = result[-1]['id']
-
+    binance = ccxt.binance({
+        'timeout': 30000
+    })
     while last_time_seconds > start_date.timestamp() and len(result) > 1:
         result = fcoin.Api().market.get_candle_info_before('M1', 'btcusdt', last_time_seconds)['data']
         if len(result) > 1:
@@ -888,9 +893,6 @@ else:
             historical_trades.extend(result)
             print(f"result:{result[0]['id']}")
         else:
-            binance = ccxt.binance({
-                'timeout': 30000
-            })
             symbol = 'BTC/USDT'
             timeframe = '1m'
             result = binance.fetch_ohlcv(symbol, timeframe, params={'endTime': last_time_seconds*1000, 'limit': 1000})

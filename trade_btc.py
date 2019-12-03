@@ -194,8 +194,11 @@ class HandleWebsocketTrade(WebsocketClient):
                         self.stop_loss_price_down = None
                         self.enter_ref_price_down = None
 
-                    go_long = self.is_short_cross_up and short_above_long and self.is_up_ma_very_long
-                    go_short = self.is_short_cross_down and short_below_long and self.is_down_ma_very_long
+                    # go_long = self.is_short_cross_up and short_above_long and self.is_up_ma_very_long
+                    # go_short = self.is_short_cross_down and short_below_long and self.is_down_ma_very_long
+
+                    go_long = self.is_up_ma_short and self.is_short_cross_up and short_above_long and self.is_up_ma_very_long
+                    go_short = self.is_down_ma_short and self.is_short_cross_down and short_below_long and self.is_down_ma_very_long
 
                     if go_long:
                         self.stop_loss_price_up = self.last_message['close'] * (1 - stop_loss_percent/100)
@@ -585,7 +588,7 @@ def simulation():
     # total_samples_opt = 216000
     # total_samples_test = 43200
 
-    total_samples_opt = 144000
+    total_samples_opt = 244000
     total_samples_test = 14400
     start_row = 0
 
@@ -606,14 +609,14 @@ def simulation():
             while open_trade:
                 exit_long, exit_short = True, True
             go_short, go_long,  exit_long, exit_short = False, False, False, False
-            ma_short_freq = random.randrange(2, 70, 2)
+            ma_short_freq = random.randrange(40, 100, 2)
             # ma_short_freq = 2 #3
             # ma_long_freq = random.randrange(6, 18, 1)
-            ma_long_freq = random.randrange(70, 600, 4)
+            ma_long_freq = random.randrange(470, 900, 20)
             # ma_long_freq = 22
-            ma_very_long_freq = random.randrange(640, 7000, 40)
+            ma_very_long_freq = random.randrange(1640, 7000, 40)
             # ma_very_long_freq = 360
-            stop_loss_percent = random.choice([1.5, 3.0])
+            stop_loss_percent = random.choice([1.5, 3.0, 1.0, 0.5])
             stop_gain = random.choice([True, False])
             # stop_loss_percent = 0.5
 
@@ -836,7 +839,7 @@ def trade(simulation_data=None):
 
                 order_book_result = order_book(symbol_use)
                 log_order = [{'side': 'buy', 'symbol': symbol_transformed,
-                              'amount': balance_result_sell['BTC'],
+                              'amount': abs(balance_result_sell['BTC']),
                               'price': order_book_result['asks'][0][0],
                               'symbol_complete': symbol_use}]
 
@@ -875,7 +878,7 @@ if not simulation_flag:
 else:
 
     historical_trades = []
-    start_date = datetime(2019, 1, 1)
+    start_date = datetime(2018, 8, 1)
     result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
     historical_trades.extend(result)
     last_time_seconds = result[-1]['id']

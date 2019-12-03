@@ -303,7 +303,7 @@ async def create_order(symbol, side, price, amount):
     if side == 'buy':
         amount_str = str(round(amount * price, 1))
 
-    order_create_param = fcoin.order_create_param(symbol_transformed, side, 'market', None, amount_str)
+    order_create_param = fcoin.order_create_param(symbol_transformed, side, 'market', amount_str)
     result = api_auth.orders.create(order_create_param)
     print(result)
     return result
@@ -404,7 +404,7 @@ def check_log_item_amount(log_entry, orders_details):
     print(f"log_entry:{log_entry}"
           f"filtered:{only_symbol_and_side} sum:{sum(only_symbol_and_side)} log_entry['amount']:{log_entry['amount']}")
 
-    return sum(only_symbol_and_side) == log_entry['amount']
+    return round(sum(only_symbol_and_side),4) == log_entry['amount']
 
 
 async def check_log_entry(log_entry, orders_detail, enter_order=False):
@@ -494,14 +494,21 @@ def submit_orders_arb(log_orders, enter_order=False):
         orders = [x for x in orders_details
                   if x['data']['symbol'] == a_log_order['symbol'] and x['data']['side'] == a_log_order['side']]
         print(f"orders found:{orders}")
+
+        def get_price(order_detail):
+            if float(order_detail['data']['price']) <= 0.0:
+                return float(order_detail['data']['executed_value']) / float(order_detail['data']['filled_amount'])
+            else:
+                return float(order_detail['data']['price'])
+
         if a_log_order['side'] == 'buy':
 
             start = quote_currency
             end = base_currency
-            total = sum([float(x['data']['filled_amount']) * float(x['data']['price']) for x in orders])
+            total = sum([float(x['data']['filled_amount']) * get_price(x) for x in orders])
 
-            rate_price_close = sum([last_trades[-1]['close'] / float(x['data']['price']) for x in orders])/len(orders)
-            print(f"rate enter price:{rate_price_close} close:{last_trades[-1]['close']} mean order price:{sum([float(x['data']['price']) for x in orders])/len(orders)}", flush=True)
+            rate_price_close = sum([last_trades[-1]['close'] / get_price(x) for x in orders])/len(orders)
+            print(f"rate enter price:{rate_price_close} close:{last_trades[-1]['close']} mean order price:{sum([get_price(x) for x in orders])/len(orders)}", flush=True)
 
             print(f"currencies_balance[start] = {currencies_balance.get(start, 0.0)} - {total}")
             currencies_balance[start] = currencies_balance.get(start, 0.0) - total
@@ -516,13 +523,13 @@ def submit_orders_arb(log_orders, enter_order=False):
             start = base_currency
             filled_amount = sum([float(x['data']['filled_amount']) for x in orders])
 
-            rate_price_close = sum([last_trades[-1]['close'] / float(x['data']['price']) for x in orders])/len(orders)
-            print(f"rate enter price:{rate_price_close} close:{last_trades[-1]['close']} mean order price:{sum([float(x['data']['price']) for x in orders])/len(orders)}", flush=True)
+            rate_price_close = sum([last_trades[-1]['close'] / get_price(x) for x in orders])/len(orders)
+            print(f"rate enter price:{rate_price_close} close:{last_trades[-1]['close']} mean order price:{sum([get_price(x) for x in orders])/len(orders)}", flush=True)
 
             currencies_balance[start] = currencies_balance.get(start, 0.0) - filled_amount
             print(f"currencies_balance[start]:{currencies_balance[start]}")
 
-            end_amount = sum([float(x['data']['filled_amount']) * float(x['data']['price']) for x in orders]) - sum([float(x['data']['fill_fees']) * float(x['data']['price']) for x in orders])
+            end_amount = sum([float(x['data']['filled_amount']) * get_price(x) for x in orders]) - sum([float(x['data']['fill_fees']) * get_price(x) for x in orders])
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
             print(f"currencies_balance[end]:{currencies_balance[end]}", flush=True)
     print(f"Final balances:{currencies_balance}", flush=True)
@@ -711,7 +718,7 @@ def simulation():
 profit_acc = 0.0
 total_trades = 0
 pair_to_remove = []
-amount_btc_minimum = 0.006
+amount_btc_minimum = 0.005
 
 # starting...
 # print(f"Waiting {back_time_limit_seconds} seconds to store power")
@@ -755,7 +762,6 @@ def trade(simulation_data=None):
 
             if simulation_flag:
                 next_msg()
-
             if go_long:
                 go_long = False
                 print(f"starting a long", flush=True)
@@ -806,7 +812,7 @@ def trade(simulation_data=None):
 
                 print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n",
                       flush=True)
-                # sys.exit()
+                sys.exit()
 
             elif go_short:
                 go_short = False

@@ -118,8 +118,8 @@ def order_create_param(*args):
       "symbol": args[0],
       "side": args[1],
       "type": args[2],
-      "price": args[3],
-      "amount": args[4]
+      # "price": args[3],
+      "amount": args[3]
     }
   return collections.OrderedDict(sorted(payload.items()))
 

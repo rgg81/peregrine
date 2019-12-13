@@ -583,7 +583,7 @@ topics_trades = {
     "args": ["candle.M1.btcusdt"]
 }
 
-simulation_flag = True
+simulation_flag = False
 finish_trade = False
 open_trade = False
 cache_moving_average = defaultdict(dict)

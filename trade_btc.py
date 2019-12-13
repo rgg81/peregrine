@@ -72,7 +72,7 @@ stop_loss_percent = 0.5
 
 
 stop_gain = True
-stop_gain_rates = [x * 0.5 for x in range(1, 5)]
+stop_gain_rates = [x * 0.5 for x in range(1, 10)]
 
 
 class HandleWebsocketTrade(WebsocketClient):
@@ -107,6 +107,27 @@ class HandleWebsocketTrade(WebsocketClient):
             elif key == 'type' and 'candle' not in value:
                 print(f'event not identified:{value}')
             elif key == 'type' and value == 'candle.M1.btcusdt':
+
+                if simulation_flag:
+                    stop_loss_up_bool = self.stop_loss_price_up is not None and self.last_message[
+                        'low'] <= self.stop_loss_price_up
+
+                    if stop_loss_up_bool:
+                        best_bid['btcusdt'] = {'price': round(self.stop_loss_price_up, 1), 'qtd': 0}
+                        best_ask['btcusdt'] = {'price': round(self.stop_loss_price_up, 1), 'qtd': 0}
+
+                    stop_loss_down_bool = self.stop_loss_price_down is not None and self.last_message[
+                        'high'] >= self.stop_loss_price_down
+                    if stop_loss_down_bool:
+                        best_bid['btcusdt'] = {'price': round(self.stop_loss_price_down, 1), 'qtd': 0}
+                        best_ask['btcusdt'] = {'price': round(self.stop_loss_price_down, 1), 'qtd': 0}
+                else:
+                    order_book_result = order_book(symbol_use)
+                    stop_loss_up_bool = self.stop_loss_price_up is not None and order_book_result['bids'][0][
+                        0] <= self.stop_loss_price_up
+                    stop_loss_down_bool = self.stop_loss_price_down is not None and order_book_result['asks'][0][
+                        0] >= self.stop_loss_price_down
+
                 if self.last_ts is None:
                     self.last_ts = msg['id']
                 if msg['id'] > self.last_ts:
@@ -144,26 +165,6 @@ class HandleWebsocketTrade(WebsocketClient):
 
                     self.is_short_cross_up = short_below_long_before and short_above_long
                     self.is_short_cross_down = short_above_long_before and short_below_long
-
-                    if simulation_flag:
-                        stop_loss_up_bool = self.stop_loss_price_up is not None and self.last_message[
-                            'low'] <= self.stop_loss_price_up
-
-                        if stop_loss_up_bool:
-                            best_bid['btcusdt'] = {'price': round(self.stop_loss_price_up, 1), 'qtd': 0}
-                            best_ask['btcusdt'] = {'price': round(self.stop_loss_price_up, 1), 'qtd': 0}
-
-                        stop_loss_down_bool = self.stop_loss_price_down is not None and self.last_message[
-                            'high'] >= self.stop_loss_price_down
-                        if stop_loss_down_bool:
-                            best_bid['btcusdt'] = {'price': round(self.stop_loss_price_down, 1), 'qtd': 0}
-                            best_ask['btcusdt'] = {'price': round(self.stop_loss_price_down, 1), 'qtd': 0}
-                    else:
-                        order_book_result = order_book(symbol_use)
-                        stop_loss_up_bool = self.stop_loss_price_up is not None and order_book_result['bids'][0][
-                            0] <= self.stop_loss_price_up
-                        stop_loss_down_bool = self.stop_loss_price_down is not None and order_book_result['asks'][0][
-                            0] >= self.stop_loss_price_down
 
                     # stop_loss_up_bool = False
                     # stop_loss_down_bool = False
@@ -582,21 +583,21 @@ topics_trades = {
     "args": ["candle.M1.btcusdt"]
 }
 
-simulation_flag = False
+simulation_flag = True
 finish_trade = False
 open_trade = False
 cache_moving_average = defaultdict(dict)
 
 
 def simulation():
-    total_iterations = 70
+    total_iterations = 50
     global stop_gain, open_trade, cache_moving_average, stop_loss_percent, historical_trades, total_trades, finish_trade, last_trades, ma_short_freq, ma_long_freq, ma_very_long_freq, profit_acc, ws2, go_short, go_long, exit_long, exit_short
 
     # total_samples_opt = 216000
     # total_samples_test = 43200
 
-    total_samples_opt = 144000
-    total_samples_test = 14400
+    total_samples_opt = 244000
+    total_samples_test = 43200
     start_row = 0
 
     profit_test = 0.0
@@ -605,7 +606,7 @@ def simulation():
 
         max_profit = -1000.0
         max_total_trades = None
-        max_config = None
+        max_config = []
 
         selected_trades_opt = historical_trades[start_row:start_row + total_samples_opt]
         # selected_trades_opt = historical_trades
@@ -616,12 +617,12 @@ def simulation():
             while open_trade:
                 exit_long, exit_short = True, True
             go_short, go_long,  exit_long, exit_short = False, False, False, False
-            ma_short_freq = random.randint(2, 3)
+            ma_short_freq = random.randint(2, 4)
             # ma_short_freq = 2 #3
             # ma_long_freq = random.randrange(6, 18, 1)
-            ma_long_freq = random.randrange(8, 22, 1)
+            ma_long_freq = random.randrange(8, 30, 1)
             # ma_long_freq = 22
-            ma_very_long_freq = random.randrange(180, 380, 20)
+            ma_very_long_freq = random.randrange(180, 580, 20)
             # ma_very_long_freq = 360
             stop_loss_percent = random.choice([0.3, 0.5])
             stop_gain = random.choice([True, False])
@@ -649,68 +650,73 @@ def simulation():
                   f"{datetime.utcfromtimestamp(last_trades[-1]['id'])} "
                   f"trade start:{datetime.utcfromtimestamp(trades[0]['id'])} "
                   f"trade end:{datetime.utcfromtimestamp(trades[-1]['id'])}", flush=True, file=f)
-            trade(simulation_data={'ws2': ws2, 'trades': trades, 'max_index': len(trades)})
+            trade(simulation_data={'ws2': ws2, 'trades': trades, 'max_index': len(trades),  'mode': 'train'})
 
             if max_total_trades is None or profit_acc > max_profit:# profit_acc/total_trades > max_profit/max_total_trades:
                 max_profit = profit_acc
                 max_total_trades = total_trades
-                max_config = ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent, stop_gain
+
+            max_config.append(((ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent), profit_acc))
+            max_config.sort(key=lambda x: x[1])
+            max_config = max_config[-5:]
             with open("log.txt", "a") as f:
                 print(f"End simulation: finished profit:{profit_acc} total trades:{total_trades} rate:{round(profit_acc/total_trades,5)} ma_short_freq:{ma_short_freq} "
                   f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq} stop_loss_percent:{stop_loss_percent} "
                       f"stop_gain:{stop_gain} iteration:{iteration_index} "
                   f"max_profit:{max_profit} max_total_trades:{max_total_trades} max rate:{round(max_profit/max_total_trades,5)} max_config:{max_config}\n\n\n", flush=True, file=f)
 
-        ws2 = HandleWebsocketTrade()
+        for a_config,a_profit in max_config:
 
-        while open_trade:
-            exit_long, exit_short = True, True
+            ws2 = HandleWebsocketTrade()
 
-        go_short, go_long,  exit_long, exit_short = False, False, False, False
+            while open_trade:
+                exit_long, exit_short = True, True
 
-        print(f"Starting test with max config:{max_config}")
+            go_short, go_long,  exit_long, exit_short = False, False, False, False
 
-        ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent, stop_gain = max_config
+            print(f"Starting test with max config:{a_config}")
 
-        cache_moving_average = defaultdict(dict)
+            ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent = a_config
 
-        df = pd.DataFrame(historical_trades)
+            cache_moving_average = defaultdict(dict)
 
-        ma_short_mean = df['close'].rolling(window=ma_short_freq).mean().values
-        ma_long_mean = df['close'].rolling(window=ma_long_freq).mean().values
-        ma_very_long_mean = df['close'].rolling(window=ma_very_long_freq).mean().values
+            df = pd.DataFrame(historical_trades)
 
-        for index in range(len(historical_trades)):
-            cache_moving_average[f"{ma_short_freq}"][f"{historical_trades[index]['id']}"] = ma_short_mean[index]
-            cache_moving_average[f"{ma_long_freq}"][f"{historical_trades[index]['id']}"] = ma_long_mean[index]
-            cache_moving_average[f"{ma_very_long_freq}"][f"{historical_trades[index]['id']}"] = ma_very_long_mean[index]
+            ma_short_mean = df['close'].rolling(window=ma_short_freq).mean().values
+            ma_long_mean = df['close'].rolling(window=ma_long_freq).mean().values
+            ma_very_long_mean = df['close'].rolling(window=ma_very_long_freq).mean().values
 
-        selected_trades_test = historical_trades[total_samples_opt + start_row - ma_very_long_freq:]
-        last_trades = selected_trades_test[:ma_very_long_freq]
+            for index in range(len(historical_trades)):
+                cache_moving_average[f"{ma_short_freq}"][f"{historical_trades[index]['id']}"] = ma_short_mean[index]
+                cache_moving_average[f"{ma_long_freq}"][f"{historical_trades[index]['id']}"] = ma_long_mean[index]
+                cache_moving_average[f"{ma_very_long_freq}"][f"{historical_trades[index]['id']}"] = ma_very_long_mean[index]
 
-        profit_acc = 0.0
+            selected_trades_test = historical_trades[total_samples_opt + start_row - ma_very_long_freq:]
+            last_trades = selected_trades_test[:ma_very_long_freq]
 
-        total_trades = 0
+            profit_acc = 0.0
 
-        time.sleep(5)
+            total_trades = 0
 
-        trades = selected_trades_test[ma_very_long_freq:]
-        if len(trades) > 0:
-            max_index = total_samples_test if total_samples_test < len(trades) else len(trades)
-            with open("log_test.txt", "a") as f:
-                print(f"Starting test waiting 5s:last_trades cold start{datetime.utcfromtimestamp(last_trades[0]['id'])} "
-                      f"{datetime.utcfromtimestamp(last_trades[-1]['id'])} "
-                      f"start sample test:{datetime.utcfromtimestamp(trades[0]['id'])} "
-                      f"end sample test:{datetime.utcfromtimestamp(trades[max_index - 1]['id'])}", flush=True, file=f)
-            trade(simulation_data={'ws2': ws2, 'trades': trades, 'max_index': max_index})
+            time.sleep(5)
 
-            profit_test += profit_acc
+            trades = selected_trades_test[ma_very_long_freq:]
+            if len(trades) > 0:
+                max_index = total_samples_test if total_samples_test < len(trades) else len(trades)
+                with open("log_test.txt", "a") as f:
+                    print(f"Starting test waiting 5s:last_trades cold start{datetime.utcfromtimestamp(last_trades[0]['id'])} "
+                          f"{datetime.utcfromtimestamp(last_trades[-1]['id'])} "
+                          f"start sample test:{datetime.utcfromtimestamp(trades[0]['id'])} "
+                          f"end sample test:{datetime.utcfromtimestamp(trades[max_index - 1]['id'])}", flush=True, file=f)
+                trade(simulation_data={'ws2': ws2, 'trades': trades, 'max_index': max_index, 'mode': 'test'})
 
-            with open("log_test.txt", "a") as f:
-                print(f"End test: finished profit:{profit_acc} profit test acc:{profit_test} "
-                      f"total trades:{total_trades} ma_short_freq:{ma_short_freq} "
-                      f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq} "
-                      f"stop_loss_percent:{stop_loss_percent} stop_gain:{stop_gain} last candle:{last_trades[-1]}\n\n\n", flush=True, file=f)
+                profit_test += profit_acc
+
+                with open("log_test.txt", "a") as f:
+                    print(f"End test: finished profit:{profit_acc} profit test acc:{profit_test} "
+                          f"total trades:{total_trades} ma_short_freq:{ma_short_freq} "
+                          f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq} "
+                          f"stop_loss_percent:{stop_loss_percent} stop_gain:{stop_gain} last candle:{last_trades[-1]}\n\n\n", flush=True, file=f)
 
         start_row += total_samples_test
 
@@ -739,7 +745,11 @@ def trade(simulation_data=None):
         nonlocal index
         global exit_long, exit_short
 
-        if index >= simulation_data['max_index']:
+        if (index >= simulation_data['max_index'] and not open_trade) or index >= len(simulation_data['trades']):
+            if simulation_data['mode'] == 'test':
+                with open("log_test.txt", "a") as f:
+                    print(f"Finished index:{index} {simulation_data['max_index']} open_trade:{open_trade} "
+                          f"len(simulation_data['trades']):{len(simulation_data['trades'])}", flush=True, file=f)
             exit_long, exit_short = True, True
             return False
 
@@ -884,7 +894,7 @@ if not simulation_flag:
 else:
 
     historical_trades = []
-    start_date = datetime(2019, 5, 1)
+    start_date = datetime(2018, 1, 1)
     result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
     historical_trades.extend(result)
     last_time_seconds = result[-1]['id']

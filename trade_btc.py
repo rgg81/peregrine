@@ -66,9 +66,9 @@ def filter_last_trades():
 
 
 ma_short_freq = 2 # 5, 21, 173
-ma_long_freq = 8
-ma_very_long_freq = 220
-stop_loss_percent = 0.5
+ma_long_freq = 10
+ma_very_long_freq = 340
+stop_loss_percent = 0.3
 
 
 stop_gain = True

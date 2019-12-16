@@ -13,6 +13,9 @@ import random
 import ccxt
 import pandas as pd
 from collections import defaultdict
+import os
+import pickle
+import json
 
 go_long = False
 go_short = False
@@ -69,6 +72,12 @@ ma_short_freq = 2 # 5, 21, 173
 ma_long_freq = 10
 ma_very_long_freq = 340
 stop_loss_percent = 0.3
+
+if os.path.exists('best.pickle'):
+    with open('best.pickle','rb') as file:
+        best_mas = pickle.load(file)
+        ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent = best_mas[-1][0]
+        print(f"recovered best configs.. using best:{best_mas[-1]}")
 
 
 stop_gain = True
@@ -432,12 +441,13 @@ def submit_orders_simulation(log_orders):
 
             start = quote_currency
             end = base_currency
-            total = a_log_order['amount'] * a_log_order['price']
+
+            total = round(a_log_order['amount'] * a_log_order['price'], 1)
             print(f"currencies_balance[start] = {currencies_balance.get(start, 0.0)} - {total}", flush=True)
             currencies_balance[start] = currencies_balance.get(start, 0.0) - total
             print(f"currencies_balance[start]:{currencies_balance[start]}", flush=True)
 
-            end_amount = a_log_order['amount']
+            end_amount = total / a_log_order['price']
             currencies_balance[end] = currencies_balance.get(end, 0.0) + end_amount
             print(f"currencies_balance[end]:{currencies_balance[end]}", flush=True)
 
@@ -583,7 +593,7 @@ topics_trades = {
     "args": ["candle.M1.btcusdt"]
 }
 
-simulation_flag = False
+simulation_flag = bool(sys.argv[3])
 finish_trade = False
 open_trade = False
 cache_moving_average = defaultdict(dict)
@@ -591,6 +601,7 @@ cache_moving_average = defaultdict(dict)
 
 def simulation():
     total_iterations = 50
+    total_traders = 2
     global stop_gain, open_trade, cache_moving_average, stop_loss_percent, historical_trades, total_trades, finish_trade, last_trades, ma_short_freq, ma_long_freq, ma_very_long_freq, profit_acc, ws2, go_short, go_long, exit_long, exit_short
 
     # total_samples_opt = 216000
@@ -598,11 +609,26 @@ def simulation():
 
     total_samples_opt = 244000
     total_samples_test = 43200
-    start_row = 0
 
+    start_row = 0
     profit_test = 0.0
 
+    if os.path.exists("state.json"):
+        with open("state.json", "r") as read_file:
+            state = json.load(read_file)
+            print(f"loading state..:{state}")
+            start_row = state['start_row']
+            profit_test = state['profit_test']
+
     while total_samples_opt + start_row < len(historical_trades):
+        state = {
+            'start_row': start_row,
+            'profit_test': profit_test
+        }
+
+        with open("state.json", "w") as write_file:
+            print(f"saving state..:{state}")
+            json.dump(state, write_file)
 
         max_profit = -1000.0
         max_total_trades = None
@@ -658,12 +684,16 @@ def simulation():
 
             max_config.append(((ma_short_freq, ma_long_freq, ma_very_long_freq, stop_loss_percent), profit_acc))
             max_config.sort(key=lambda x: x[1])
-            max_config = max_config[-5:]
+            max_config = max_config[-total_traders:]
             with open("log.txt", "a") as f:
-                print(f"End simulation: finished profit:{profit_acc} total trades:{total_trades} rate:{round(profit_acc/total_trades,5)} ma_short_freq:{ma_short_freq} "
+                print(f"End simulation: finished profit:{profit_acc} {profit_acc_btc} total trades:{total_trades} rate:{round(profit_acc/total_trades,5)} ma_short_freq:{ma_short_freq} "
                   f"ma_long_freq:{ma_long_freq} ma_very_long_freq:{ma_very_long_freq} stop_loss_percent:{stop_loss_percent} "
                       f"stop_gain:{stop_gain} iteration:{iteration_index} "
                   f"max_profit:{max_profit} max_total_trades:{max_total_trades} max rate:{round(max_profit/max_total_trades,5)} max_config:{max_config}\n\n\n", flush=True, file=f)
+
+        with open('best.pickle','wb') as file:
+            print(f"Pickling best configs")
+            pickle.dump(max_config, file)
 
         for a_config,a_profit in max_config:
 
@@ -722,9 +752,10 @@ def simulation():
 
 
 profit_acc = 0.0
+profit_acc_btc = 0.0
 total_trades = 0
 pair_to_remove = []
-amount_btc_minimum = 0.005
+amount_btc_minimum = 0.0060
 
 # starting...
 # print(f"Waiting {back_time_limit_seconds} seconds to store power")
@@ -737,7 +768,7 @@ symbol_use = 'BTC/USDT'
 
 
 def trade(simulation_data=None):
-    global force_stop, go_short, go_long, open_trade, finish_trade, profit_acc, total_trades, exit_long, exit_short
+    global force_stop, go_short, go_long, open_trade, finish_trade, profit_acc, profit_acc_btc, total_trades, exit_long, exit_short
 
     index = 0
 
@@ -802,7 +833,7 @@ def trade(simulation_data=None):
 
                 order_book_result = order_book(symbol_use)
                 log_order = [{'side': 'sell', 'symbol': symbol_transformed,
-                              'amount': amount_btc_minimum,
+                              'amount': abs(round(balance_result_buy['BTC'], 4)),
                               'price': order_book_result['bids'][0][0],
                               'symbol_complete': symbol_use}]
 
@@ -813,14 +844,18 @@ def trade(simulation_data=None):
                 print(balance_result_sell)
 
                 profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
+                profit_iteration_btc = balance_result_buy['BTC'] + balance_result_sell['BTC']
 
                 profit_acc += profit_iteration
+                profit_acc_btc += profit_iteration_btc
+
+                profit_acc += profit_iteration_btc * last_trades[-1]['close']
 
                 total_trades += 1
 
                 open_trade = False
 
-                print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n",
+                print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} add btc to usdt:{profit_iteration_btc * last_trades[-1]['close']} profit_acc_btc:{profit_acc_btc} profit_iteration_btc:{profit_iteration_btc} total_trades:{total_trades}\n\n",
                       flush=True)
                 # sys.exit()
 
@@ -855,7 +890,7 @@ def trade(simulation_data=None):
 
                 order_book_result = order_book(symbol_use)
                 log_order = [{'side': 'buy', 'symbol': symbol_transformed,
-                              'amount': amount_btc_minimum,
+                              'amount': abs(round(balance_result_sell['BTC'], 4)),
                               'price': order_book_result['asks'][0][0],
                               'symbol_complete': symbol_use}]
 
@@ -866,16 +901,23 @@ def trade(simulation_data=None):
                 print(balance_result_buy)
 
                 profit_iteration = balance_result_buy['USDT'] + balance_result_sell['USDT']
+                profit_iteration_btc = balance_result_buy['BTC'] + balance_result_sell['BTC']
+
                 profit_acc += profit_iteration
+                profit_acc_btc += profit_iteration_btc
+
+                profit_acc += profit_iteration_btc * last_trades[-1]['close']
 
                 total_trades += 1
 
                 open_trade = False
 
-                print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} total_trades:{total_trades}\n\n",
+                print(f"Final result is:{profit_iteration} profit_acc:{profit_acc} add btc to usdt:{profit_iteration_btc * last_trades[-1]['close']} profit_acc_btc:{profit_acc_btc} profit_iteration_btc:{profit_iteration_btc} total_trades:{total_trades}\n\n",
                       flush=True)
             #     # sys.exit()
             finish_trade = True
+            if not simulation_flag:
+                time.sleep(0.001)
 
         except Exception as ex:
             print(ex, flush=True)
@@ -895,35 +937,56 @@ else:
 
     historical_trades = []
     start_date = datetime(2018, 1, 1)
+    # start_date = datetime(2019, 5, 1)
     result = fcoin.Api().market.get_candle_info('M1', 'btcusdt')['data']
     historical_trades.extend(result)
     last_time_seconds = result[-1]['id']
     binance = ccxt.binance({
         'timeout': 30000
     })
+    file_cache_name = f".cache/candles-binance.cache"
+    cache_candles = None
+    if os.path.exists(f"{file_cache_name}"):
+        cache_candles = pd.read_pickle(file_cache_name)
+        cache_candles.index = cache_candles['id']
+        cache_candles.reindex()
+
+        print(cache_candles[cache_candles['id'] == 1576179480])
+
+
     while last_time_seconds > start_date.timestamp() and len(result) > 1:
         result = fcoin.Api().market.get_candle_info_before('M1', 'btcusdt', last_time_seconds)['data']
         if len(result) > 1:
             last_time_seconds = result[-1]['id']
             result = result[1:]
             historical_trades.extend(result)
-            print(f"result:{result[0]['id']}")
+            print(f"result:{datetime.utcfromtimestamp(result[0]['id'])}")
         else:
             symbol = 'BTC/USDT'
             timeframe = '1m'
-            result = binance.fetch_ohlcv(symbol, timeframe, params={'endTime': last_time_seconds*1000, 'limit': 1000})
-            # result = binance.convert_ohlcv_to_trading_view(result)
-            result.reverse()
 
-            result = result[1:]
+            if cache_candles is not None and last_time_seconds in cache_candles.index:
+                result = cache_candles.loc[:last_time_seconds]
+                result = result.to_dict('records')
+                print(f"last cache result:{datetime.utcfromtimestamp(result[-1]['id'])} "
+                      f"first:{datetime.utcfromtimestamp(result[0]['id'])} "
+                      f"last_time_seconds:{datetime.utcfromtimestamp(last_time_seconds)}")
+                result.reverse()
+                result = result[1:]
 
-            result = [{'open': x[1], 'high': x[2], 'low': x[3], 'close': x[4], 'base_vol': x[5], 'id': x[0] // 1000} for x in result]
+            if len(result) < 1000:
+                result = binance.fetch_ohlcv(symbol, timeframe, params={'endTime': last_time_seconds*1000, 'limit': 1000})
+                # result = binance.convert_ohlcv_to_trading_view(result)
+                result.reverse()
+                result = result[1:]
+                result = [{'open': x[1], 'high': x[2], 'low': x[3], 'close': x[4], 'base_vol': x[5], 'id': x[0] // 1000} for x in result]
             last_time_seconds = result[-1]['id']
-
             historical_trades.extend(result)
-            print(f"result:{result[0]['id']}")
+            print(f"result:{datetime.utcfromtimestamp(result[0]['id'])}")
 
     historical_trades.reverse()
+    print(f"Saving cache")
+    pd.to_pickle(pd.DataFrame(historical_trades), file_cache_name)
     simulation()
     # Thread(target=simulation,args=()).start()
 

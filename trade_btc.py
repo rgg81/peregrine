@@ -917,7 +917,7 @@ def trade(simulation_data=None):
             #     # sys.exit()
             finish_trade = True
             if not simulation_flag:
-                time.sleep(0.001)
+                time.sleep(0.010)
 
         except Exception as ex:
             print(ex, flush=True)

@@ -767,6 +767,7 @@ last_show_status = datetime.now()
 wait_time_until_finish_seconds = 50
 symbol_use = 'BTC/USDT'
 
+wait_cpu_time_seconds = 0.01
 
 def trade(simulation_data=None):
     global force_stop, go_short, go_long, open_trade, finish_trade, profit_acc, profit_acc_btc, total_trades, exit_long, exit_short
@@ -830,6 +831,8 @@ def trade(simulation_data=None):
                         if not valid:
                             continue
                     finish_trade = True
+                    if not simulation_flag:
+                        time.sleep(wait_cpu_time_seconds)
                     pass
 
                 order_book_result = order_book(symbol_use)
@@ -887,6 +890,8 @@ def trade(simulation_data=None):
                         if not valid:
                             continue
                     finish_trade = True
+                    if not simulation_flag:
+                        time.sleep(wait_cpu_time_seconds)
                     pass
 
                 order_book_result = order_book(symbol_use)
@@ -918,7 +923,7 @@ def trade(simulation_data=None):
             #     # sys.exit()
             finish_trade = True
             if not simulation_flag:
-                time.sleep(0.010)
+                time.sleep(wait_cpu_time_seconds)
 
         except Exception as ex:
             print(ex, flush=True)

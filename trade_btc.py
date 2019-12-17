@@ -80,6 +80,7 @@ if os.path.exists('best.pickle'):
         print(f"recovered best configs.. using best:{best_mas[-1]}")
 
 
+assert len(last_trades) >= ma_very_long_freq, f"{len(last_trades)} NOT >= {ma_very_long_freq}"
 stop_gain = True
 stop_gain_rates = [x * 0.5 for x in range(1, 10)]
 
